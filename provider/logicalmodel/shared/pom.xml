@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <artifactId>patchbay-provider-logicalmodel-shared</artifactId>
+
+  <parent>
+    <groupId>io.github.ljnelson</groupId>
+    <artifactId>patchbay-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <relativePath>../../../pom.xml</relativePath>
+  </parent>
+
+  <name>PatchBay: Provider: Logical Model: Shared</name>
+  <description>PatchBay: Provider: Logical Model: Shared: Shared classes for implementing LogicalModel.Providers.</description>
+
+  <dependencies>
+
+    <!-- Compile-scoped dependencies. -->
+
+    <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>jakarta.config-api</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+        <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>patchbay</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+        <scope>compile</scope>
+    </dependency>
+
+
+    <!-- Test-scoped dependencies. -->
+
+    <dependency>
+      <groupId>org.hamcrest</groupId>
+      <artifactId>hamcrest</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+</project>

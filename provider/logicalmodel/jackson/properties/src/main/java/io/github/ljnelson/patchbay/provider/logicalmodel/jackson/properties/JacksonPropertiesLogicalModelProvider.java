@@ -11,23 +11,32 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package io.github.ljnelson.patchbay.provider.configurationobject.proxy;
-
-import io.github.ljnelson.jakarta.config.NoSuchObjectException;
+package io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties;
 
 import io.github.ljnelson.patchbay.PatchBay;
-import io.github.ljnelson.patchbay.PatchBay.ConfigurationObjectProvider;
 import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
 
-public class ProxyBasedProvider implements ConfigurationObjectProvider {
+import io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared.AbstractJacksonLogicalModelProvider;
 
-  public ProxyBasedProvider() {
+public final class JacksonPropertiesLogicalModelProvider extends AbstractJacksonLogicalModelProvider {
+
+  public JacksonPropertiesLogicalModelProvider() {
     super();
   }
 
   @Override
-  public <L extends LogicalModel.Configuration, T, U extends T> U configurationObjectFor(final PatchBay loader, final L logicalModel, final Class<T> configurationClass) {
-    throw new NoSuchObjectException();
+  public final <T, U extends LogicalModel.Configuration> U logicalModelFor(final PatchBay loader, final Class<T> configurationClass) {
+    throw new UnsupportedOperationException("TODO: implement");
+  }
+
+  @Override
+  public final int priority() {
+      return 0;
+  }
+
+  @Override
+  public final boolean accepts(final PatchBay loader, final Class<?> configurationClass) {
+    return true;
   }
   
 }

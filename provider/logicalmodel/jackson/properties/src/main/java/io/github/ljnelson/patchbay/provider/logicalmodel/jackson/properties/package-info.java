@@ -11,23 +11,9 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package io.github.ljnelson.patchbay.provider.configurationobject.proxy;
 
-import io.github.ljnelson.jakarta.config.NoSuchObjectException;
-
-import io.github.ljnelson.patchbay.PatchBay;
-import io.github.ljnelson.patchbay.PatchBay.ConfigurationObjectProvider;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
-
-public class ProxyBasedProvider implements ConfigurationObjectProvider {
-
-  public ProxyBasedProvider() {
-    super();
-  }
-
-  @Override
-  public <L extends LogicalModel.Configuration, T, U extends T> U configurationObjectFor(final PatchBay loader, final L logicalModel, final Class<T> configurationClass) {
-    throw new NoSuchObjectException();
-  }
-  
-}
+/**
+ * Provides classes and interfaces helping to implement Jackson-based {@link
+ * io.github.ljnelson.patchbay.PatchBay.LogicalModelProvider}s that read properties files.
+ */
+package io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties;

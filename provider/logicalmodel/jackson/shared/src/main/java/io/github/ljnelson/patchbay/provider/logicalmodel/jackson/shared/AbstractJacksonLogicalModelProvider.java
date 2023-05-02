@@ -15,6 +15,9 @@ package io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared;
 
 import java.io.IOException;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -24,6 +27,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,24 +43,26 @@ import io.github.ljnelson.jakarta.config.ConfigException;
 import com.fasterxml.jackson.core.ObjectCodec;
 import com.fasterxml.jackson.core.TreeNode;
 
+import io.github.ljnelson.patchbay.PatchBay;
 import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
 import io.github.ljnelson.patchbay.PatchBay.LogicalModelProvider;
 
 public abstract class AbstractJacksonLogicalModelProvider implements LogicalModelProvider {
-
 
   /*
    * Static fields.
    */
 
 
-  // Efficiently stores whether a given class is a configuration class or not.
-  private static final ClassValue<Boolean> configurationClass = new ClassValue<>() {
-      @Override
-      protected final Boolean computeValue(final Class<?> c) {
-        return AbstractJacksonLogicalModelProvider.computeConfigurationClass(c);
-      }
-    };
+  private static final VarHandle CONFIG;
+
+  static {
+    try {
+      CONFIG = MethodHandles.lookup().findVarHandle(AbstractJacksonLogicalModelProvider.class, "config", ProviderConfiguration.class);
+    } catch (final IllegalAccessException | NoSuchFieldException e) {
+      throw (ExceptionInInitializerError)new ExceptionInInitializerError(e.getMessage()).initCause(e);
+    }
+  }
 
 
   /*
@@ -64,8 +71,12 @@ public abstract class AbstractJacksonLogicalModelProvider implements LogicalMode
 
 
   // Efficiently stores the set of canonical representations of configuration keys effectively declared by a
-  // configuration class.
+  // configuration class. This is an instance field because it uses the virtual computeKeys(Class<?>) method defined
+  // below.
   private final ClassValue<Set<String>> keys;
+
+  // My configuration.
+  private volatile ProviderConfiguration config;
 
 
   /*
@@ -81,6 +92,7 @@ public abstract class AbstractJacksonLogicalModelProvider implements LogicalMode
           return AbstractJacksonLogicalModelProvider.this.computeKeys(c);
         }
       };
+
   }
 
 
@@ -89,86 +101,32 @@ public abstract class AbstractJacksonLogicalModelProvider implements LogicalMode
    */
 
 
-  /**
-   * Translates the supplied {@link TreeNode} into a {@link LogicalModel.Configuration}, consulting the supplied
-   * configuration class for relevant configuration keys, and the supplied {@link ObjectCodec} for representing certain
-   * {@link TreeNode}s as {@link String}s, and returns the result.
-   *
-   * @param configurationClass the configuration class; must not be {@code null}; must be a configuration class
-   *
-   * @param treeNode the {@link TreeNode} to translate; must {@linkplain TreeNode#isObject() be an "object node"} in the
-   * parlance of Jackson; must not be {@code null}
-   *
-   * @param codec an {@link ObjectCodec} used to represent a {@link TreeNode} that is a {@linkplain TreeNode#isValue()
-   * "value node"} in the parlance of Jackson as a {@link String}; must not be {@code null}
-   *
-   * @return the resulting logical configuration model; never {@code null}
-   *
-   * @exception NullPointerException if any argument is {@code null}
-   *
-   * @exception ConfigException if any error occurs
-   */
+  @Override
+  public void configure(final PatchBay loader) {
+
+  }
+
   protected final LogicalModel.Configuration translate(final Class<?> configurationClass,
-                                                       final TreeNode treeNode,
+                                                       final TreeNode objectNode,
                                                        final ObjectCodec codec) {
-    return this.translateConfigurationClass(configurationClass, null, treeNode, codec);
-  }
-
-  // Turn a canonical representation of a configuration key into a Jackson TreeNode "field name".
-  protected String fieldNameFor(final Class<?> configurationClass,
-                                final String key,
-                                final TreeNode objectNode,
-                                final ObjectCodec codec) {
-    return key;
-  }
-
-  private final String fieldNameFor(final Type type,
-                                    final String key,
-                                    final TreeNode objectNode,
-                                    final ObjectCodec codec) {
-    return switch (type) {
-    case Class<?> c -> this.fieldNameFor(c, key, objectNode, codec);
-    case ParameterizedType p -> this.fieldNameFor(p.getRawType(), key, objectNode, codec);
-    default -> null;
-    };
+    if (!PatchBay.configurationClass(configurationClass)) {
+      throw new IllegalArgumentException("configurationClass: " + configurationClass);
+    }
+    return this.translateObjectNode(configurationClass, true, objectNode, codec);
   }
 
   // Turn a method into a configuration key canonical representation.
   protected String keyFor(final Method m) {
     return m.getName();
   }
-
-  // Given a canonical representation of a configuration key, and the configuration class it's "for", turn it into a
-  // method name.
-  protected <T> String methodNameFor(final Class<T> configurationClass, final String configurationKey) {
-    return configurationKey;
-  }
-
+  
   // Given a configuration class, return a Collection of canonical representations of configuration keys it logically
-  // contains.
+  // contains. Probably can move up to PatchBay level.
   final Set<String> keys(final Class<?> c) {
     return this.keys.get(c);
   }
 
-  private final Set<String> keys(final Type t) {
-    return switch (t) {
-    case Class<?> c -> this.keys(c);
-    case ParameterizedType p -> this.keys(p.getRawType());
-    default -> Set.of();
-    };
-  }
-
-  // Return a Collection of canonical representations of configuration keys that the return type of the supplied public,
-  // non-static, zero-argument accessor Method logically has.
-  final Set<String> keys(final Method m) {
-    final int modifiers = m.getModifiers();
-    if (Modifier.isStatic(modifiers) || !Modifier.isPublic(modifiers) || !m.getDeclaringClass().isInterface() || m.getParameterCount() > 0) {
-      return Set.of();
-    }
-    return this.keys(m.getReturnType());
-  }
-
-  protected String rawValue(final TreeNode v, final ObjectCodec codec) {
+  protected String rawValue(final boolean expected, final TreeNode v, final ObjectCodec codec) {
     try {
       return codec.treeToValue(v, String.class);
     } catch (final IOException e) {
@@ -181,141 +139,130 @@ public abstract class AbstractJacksonLogicalModelProvider implements LogicalMode
    * Private instance methods.
    */
 
-
-  private final LogicalModel.Value translate(final Type t,
-                                             final TreeNode treeNode,
-                                             final ObjectCodec codec) {
-    return this.translate(t, null, treeNode, codec);
+  
+  private final LogicalModel.Value translateTreeNode(final Type t,
+                                                     final boolean expected,
+                                                     final TreeNode treeNode,
+                                                     final ObjectCodec codec) {
+    return switch (treeNode) {
+    case TreeNode o when o.isObject() -> translateObjectNode(t, expected, o, codec);
+    case TreeNode a when a.isArray() -> translateArrayNode(t, expected, a, codec);
+    case TreeNode m when m.isMissingNode() -> translateMissingNode(m, expected, codec);
+    case TreeNode v when v.isValueNode() -> translateValueNode(t, expected, v, codec);
+    default -> throw new AssertionError();
+    };
   }
 
-  private final LogicalModel.Value translate(final Type t,
-                                             Set<? extends String> expectedKeys,
-                                             final TreeNode treeNode,
-                                             final ObjectCodec codec) {
-    if (configurationClass(t)) {
-      return this.translateConfigurationClass((Class<?>)t, expectedKeys, treeNode, codec);
-    } else if (list(t)) {
-      return this.translateList(t, treeNode, codec);
-    }
-    return this.translateOther(t, treeNode, codec);
-  }
-
-  private final LogicalModel.Configuration translateConfigurationClass(final Class<?> c,
-                                                                       Set<? extends String> expectedKeys,
-                                                                       final TreeNode objectNode,
-                                                                       final ObjectCodec codec) {
-    if (!configurationClass(c)) {
-      throw new IllegalArgumentException("c: " + c);
-    }
+  private final LogicalModel.Configuration translateObjectNode(final Type t,
+                                                               final boolean expected,
+                                                               final TreeNode objectNode,
+                                                               final ObjectCodec codec) {
     if (!objectNode.isObject()) {
-      throw new IllegalArgumentException("!objectNode.isObject(): " + objectNode);
+      throw new IllegalArgumentException();
     }
-    if (expectedKeys == null) {
-      expectedKeys = this.keys(c);
-    }
-    if (expectedKeys.isEmpty()) {
+    if (objectNode.size() == 0) {
       return LogicalModel.Configuration.of();
     }
     final Map<String, LogicalModel.Value> map = new HashMap<>();
-    for (final String key : expectedKeys) {
-      // Every expected key will have a LogicalModel.Value for it, even if that Value is absence.
-      final Method accessor = this.methodFor(c, key, objectNode, codec);
-      if (accessor == null) {
-        map.put(key, this.translate(null, Set.of(), codec.missingNode(), codec));
-        continue;
-      }
-      final String fieldName = this.fieldNameFor(c, key, objectNode, codec);
-      if (fieldName == null) {
-        map.put(key, this.translate(null, Set.of(), codec.missingNode(), codec));
-        continue;
-      }
-      final Type accessorType = accessor.getGenericReturnType();
-      final Set<String> accessorKeys = this.keys(accessorType);
-      final TreeNode value = objectNode.path(fieldName); // yes, path() not get(); see javadocs
-      assert value != null; // could very well be a missing node, however
-      map.put(key, this.translate(accessorType, accessorKeys, value, codec));
+    final Set<String> expectedKeys = this.keys(t); // TODO: use
+    final Iterator<String> fieldNamesIterator = objectNode.fieldNames();
+    while (fieldNamesIterator.hasNext()) {
+      final String fn = fieldNamesIterator.next();
+      final String key = fieldNameToKey(fn);
+      final Method accessor = this.methodFor(t, objectNode, fn, codec);
+      map.put(fn, translateTreeNode(accessor == null ? null : accessor.getGenericReturnType(),
+                                    key != null && expectedKeys.contains(key), // was it an expected value or not?
+                                    objectNode.get(fn),
+                                    codec));
     }
-    assert expectedKeys.equals(map.keySet());
-    return new AbstractJacksonLogicalModelProvider.Configuration(map);
+    return new AbstractJacksonLogicalModelProvider.Configuration(expected, expectedKeys, map);
   }
 
-  private final LogicalModel.ListValue translateList(final Type t, // nullable
-                                                     final TreeNode treeNode,
-                                                     final ObjectCodec codec) {
+  private final String fieldNameToKey(final String fieldName) { // TODO: could be richer to permit some other strategy?
+    return fieldName;
+  }
+
+  private final LogicalModel.ListValue translateArrayNode(final Type t,
+                                                          final boolean expected,
+                                                          final TreeNode arrayNode,
+                                                          final ObjectCodec codec) {
+    if (!arrayNode.isArray()) {
+      throw new IllegalArgumentException("!arrayNode.isArray(): " + arrayNode);
+    }
     if (!list(t)) {
       throw new IllegalArgumentException("t: " + t);
     }
-    if (!treeNode.isArray()) {
-      throw new IllegalArgumentException("!treeNode.isArray(): " + treeNode);
-    }
-    final int size = treeNode.size();
+    final int size = arrayNode.size();
     if (size == 0) {
       return LogicalModel.ListValue.of();
     }
     final Type listElementType = t instanceof ParameterizedType p ? p.getActualTypeArguments()[0] : Object.class;
     final List<LogicalModel.Value> list = new ArrayList<>();
     for (int i = 0; i < size; i++) {
-      final TreeNode listElementNode = treeNode.get(i);
-      assert listElementNode != null;
-      list.add(this.translate(listElementType, listElementNode, codec));
+      list.add(this.translateTreeNode(listElementType, expected, arrayNode.get(i), codec));
     }
-    return new AbstractJacksonLogicalModelProvider.ListValue(list);
+    return new AbstractJacksonLogicalModelProvider.ListValue(expected, list);
   }
 
-  private final LogicalModel.Value translateOther(final Type t,
-                                                  final TreeNode treeNode,
-                                                  final ObjectCodec codec) {
-    if (treeNode.isValueNode()) {
-      return LogicalModel.Value.ofRaw(this.rawValue(treeNode, codec));
-    } else if (treeNode.isMissingNode()) {
-      return LogicalModel.Value.ofAbsence();
-    } else if (configurationClass(t)) {
-      throw new IllegalArgumentException("configurationClass(t): " + t + "; call translateConfigurationClass() instead");
-    } else if (list(t)) {
-      throw new IllegalArgumentException("list(t): " + t + "; call translateList() instead");
-    } else {
-      throw new IllegalArgumentException("treeNode: " + treeNode);
+  private final LogicalModel.Value translateMissingNode(final TreeNode missingNode,
+                                                        final boolean expected, // may not be needed
+                                                        final ObjectCodec codec) {
+    if (!missingNode.isMissingNode()) {
+      throw new IllegalArgumentException("!missingNode.isMissingNode(): " + missingNode);
     }
+    return expected ? LogicalModel.Absence.ofExpected() : LogicalModel.Absence.ofUnexpected();
   }
 
-  // Given a canonical representation of a configuration key, and the configuration interface it's "for", turn it into a
-  // public, non-static, zero-argument accessor Method if possible.
-  private final Method methodFor(final Class<?> configurationClass,
-                                 final String configurationKey,
+  private final LogicalModel.Value translateValueNode(final Type t,
+                                                      final boolean expected,
+                                                      final TreeNode valueNode,
+                                                      final ObjectCodec codec) {
+    if (!valueNode.isValueNode()) {
+      throw new IllegalArgumentException("!valueNode.isValueNode(): " + valueNode);
+    }
+    return LogicalModel.RawValue.of(expected, this.rawValue(expected, valueNode, codec));
+  }
+  
+  private final Set<String> keys(final Type t) {
+    return switch (t) {
+    case Class<?> c -> this.keys(c);
+    case ParameterizedType p -> this.keys(p.getRawType());
+    default -> Set.of();
+    };
+  }
+  
+  private final Method methodFor(final Type t,
                                  final TreeNode objectNode,
+                                 final String fieldName,
                                  final ObjectCodec codec) {
-    if (configurationClass == null || !configurationClass.isInterface()) {
-      // quick
-      return null;
-    }
-    Method m;
-    try {
-      m = configurationClass.getMethod(this.methodNameFor(configurationClass, configurationKey));
-    } catch (final NoSuchMethodException e) {
-      return null;
-    }
-    final int modifiers = m.getModifiers();
-    if (Modifier.isStatic(modifiers) || !Modifier.isPublic(modifiers)) {
-      return null;
-    }
-    return m;
-  }
-
-  private final Method methodFor(final Type type,
-                                 final String configurationKey,
-                                 final TreeNode objectNode,
-                                 final ObjectCodec codec) {
-    return switch (type) {
-    case Class<?> c -> this.methodFor(c, configurationKey, objectNode, codec);
-    case ParameterizedType p -> this.methodFor(p.getRawType(), configurationKey, objectNode, codec);
+    return switch (t) {
+    case Class<?> c -> this.methodFor(c, objectNode, fieldName, codec);
+    case ParameterizedType p -> this.methodFor(p.getRawType(), objectNode, fieldName, codec);
     default -> null;
     };
   }
 
+  private final Method methodFor(final Class<?> c, // nullable
+                                 final TreeNode objectNode,
+                                 final String fieldName,
+                                 final ObjectCodec codec) {
+    if (!PatchBay.configurationClass(c)) {
+      return null;
+    }
+    Method m;
+    try {
+      m = c.getMethod(fieldName);
+    } catch (final NoSuchMethodException e) {
+      return null;
+    }
+    return PatchBay.configurationKey(m) ? m : null;
+  }
+
   // Given a Class, if it is a configuration class, return the set of canonical representations of the configuration
-  // keys it logically declares. In all other cases return an empty set.
+  // keys it logically declares. In all other cases return an empty set. Called once, ever, by the keys ClassValue
+  // field.
   private final Set<String> computeKeys(final Class<?> configurationClass) {
-    if (configurationClass == null || !configurationClass.isInterface()) {
+    if (!PatchBay.configurationClass(configurationClass)) {
       return Set.of();
     }
     final Method[] methods = configurationClass.getMethods();
@@ -342,24 +289,8 @@ public abstract class AbstractJacksonLogicalModelProvider implements LogicalMode
    */
 
 
-  // Is c a configuration class?
-  private static final boolean configurationClass(final Class<?> c) {
-    return c != null && configurationClass.get(c);
-  }
-
   private static final boolean configurationClass(final Type t) {
-    return t instanceof Class<?> c && configurationClass(c);
-  }
-
-  private static final boolean computeConfigurationClass(final Class<?> c) {
-    if (c != null && c.isInterface()) {
-      for (final Method m : c.getMethods()) { // public methods, declared and inherited
-        if (!Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 0) {
-          return true;
-        }
-      }
-    }
-    return false;
+    return t instanceof Class<?> c && PatchBay.configurationClass(c);
   }
 
   // Is c a List?
@@ -383,25 +314,59 @@ public abstract class AbstractJacksonLogicalModelProvider implements LogicalMode
    */
 
 
+  protected static interface ProviderConfiguration {
+
+  }
+
   static final class Configuration implements LogicalModel.Configuration {
 
+    private final boolean expected;
+    
     private final Set<String> keys;
+
+    private final Set<String> expectedKeys;
+    
+    private final Set<String> unexpectedKeys;
 
     private final Function<? super String, ? extends LogicalModel.Value> valueFunction;
 
-    Configuration(final Map<? extends String, ? extends LogicalModel.Value> map) {
+    Configuration(final boolean expected, final Set<? extends String> expectedKeys, final Map<? extends String, ? extends LogicalModel.Value> map) {
       super();
+      this.expected = expected;
       final Map<String, LogicalModel.Value> m = Map.copyOf(map);
-      this.keys = m.keySet();
-      this.valueFunction = m::get;
+      this.expectedKeys = expectedKeys == null || expectedKeys.isEmpty() ? Set.of() : Set.copyOf(expectedKeys);
+      Set<String> keys = new HashSet<>(m.keySet());
+      keys.removeIf(this.expectedKeys::contains);
+      this.unexpectedKeys = Set.copyOf(keys);
+      keys.addAll(this.expectedKeys);
+      this.keys = Collections.unmodifiableSet(keys);
+      this.valueFunction = k -> {
+        LogicalModel.Value v = m.get(k);
+        if (v == null) {
+          if (this.expectedKeys.contains(k)) {
+            return LogicalModel.Absence.ofExpected();
+          }
+          assert !this.unexpectedKeys.contains(k) : "Somehow an unexpected key had a null value";
+        } else {
+          assert expectedKeys.contains(k) ? v.expected() : !v.expected();
+        }
+        return v;
+      };
     }
 
-    Configuration(final Set<? extends String> keys, final Function<? super String, ? extends LogicalModel.Value> valueFunction) {
-      super();
-      this.keys = Set.copyOf(keys);
-      this.valueFunction = Objects.requireNonNull(valueFunction, "valueFunction");
+    @Override
+    public final boolean expected() {
+      return this.expected;
     }
 
+    public final Set<String> expectedKeys() {
+      return this.expectedKeys;
+    }
+
+    public final Set<String> unexpectedKeys() {
+      return this.unexpectedKeys;
+    }
+    
     @Override // LogicalModel.Configuration
     public final Set<String> keys() {
       return this.keys;
@@ -416,20 +381,29 @@ public abstract class AbstractJacksonLogicalModelProvider implements LogicalMode
 
   static final class ListValue implements LogicalModel.ListValue {
 
+    private final boolean expected;
+    
     private final int size;
 
     private final IntFunction<? extends LogicalModel.Value> valueFunction;
 
-    ListValue(final List<? extends LogicalModel.Value> list) {
+    ListValue(final boolean expected, final List<? extends LogicalModel.Value> list) {
       super();
+      this.expected = expected;
       this.size = list.size();
       this.valueFunction = list::get;
     }
 
-    ListValue(final int size, final IntFunction<? extends LogicalModel.Value> valueFunction ){
+    ListValue(final boolean expected, final int size, final IntFunction<? extends LogicalModel.Value> valueFunction ){
       super();
+      this.expected = expected;
       this.size = Math.max(0, size);
       this.valueFunction = Objects.requireNonNull(valueFunction, "valueFunction");
+    }
+
+    @Override
+    public final boolean expected() {
+      return this.expected;
     }
 
     @Override

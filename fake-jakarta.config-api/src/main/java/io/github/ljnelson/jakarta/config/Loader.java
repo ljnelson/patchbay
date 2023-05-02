@@ -13,7 +13,12 @@
  */
 package io.github.ljnelson.jakarta.config;
 
+import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.WeakHashMap;
+
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A loader of configuration-related objects.
@@ -159,16 +164,37 @@ public interface Loader {
    * @exception ConfigException if bootstrapping failed because of a {@link Loader#load(Class)} problem
    */
   public static Loader bootstrap(final ClassLoader classLoader) {
-    Loader loader = ServiceLoader.load(Loader.class, classLoader)
-      .findFirst()
-      .orElseThrow(NoSuchObjectException::new);
-    try {
-      return loader.load(Loader.class);
-    } catch (NoSuchObjectException absentValueException) {
-      System.getLogger(Loader.class.getName())
-        .log(System.Logger.Level.DEBUG, absentValueException::getMessage, absentValueException);
-      return loader;
+    final class BootstrapLoaders {
+      private static final ReadWriteLock LOCK = new ReentrantReadWriteLock();
+      private static final Map<ClassLoader, Loader> MAP = new WeakHashMap<>();
     }
+    Loader returnValue;
+    BootstrapLoaders.LOCK.readLock().lock();
+    try {
+      returnValue = BootstrapLoaders.MAP.get(classLoader);
+    } finally {
+      BootstrapLoaders.LOCK.readLock().unlock();
+    }
+    if (returnValue == null) {
+      BootstrapLoaders.LOCK.writeLock().lock();
+      try {        
+        returnValue = BootstrapLoaders.MAP.computeIfAbsent(classLoader, cl -> {
+          Loader loader = ServiceLoader.load(Loader.class, cl)
+            .findFirst()
+            .orElseThrow(NoSuchObjectException::new);
+          try {
+            return loader.load(Loader.class);
+          } catch (NoSuchObjectException absentValueException) {
+            System.getLogger(Loader.class.getName())
+              .log(System.Logger.Level.DEBUG, absentValueException::getMessage, absentValueException);
+            return loader;
+          }
+        });
+      } finally {
+        BootstrapLoaders.LOCK.writeLock().unlock();
+      }
+    }
+    return returnValue;
   }
 
 }

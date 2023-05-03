@@ -26,7 +26,9 @@ public class ProxyBasedProvider implements ConfigurationObjectProvider {
   }
 
   @Override
-  public <L extends LogicalModel.Configuration, T, U extends T> U configurationObjectFor(final PatchBay loader, final L logicalModel, final Class<T> configurationClass) {
+  public <T, U extends T> U configurationObjectFor(final PatchBay loader,
+                                                   final LogicalModel.Configuration logicalModel,
+                                                   final Class<T> configurationClass) {
     throw new NoSuchObjectException();
   }
   

@@ -120,6 +120,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
   }
 
   protected TreeNode treeNode(final Class<?> configurationClass, final C codec) throws IOException {
+    @SuppressWarnings("unchecked")
     final JsonParser parser = this.parser(configurationClass, (F)codec.getFactory());
     if (parser == null) {
       return codec.createObjectNode();
@@ -127,7 +128,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     parser.setCodec(codec);
     return parser.readValueAsTree();
   }
-  
+
   protected final LogicalModel.Configuration translate(final Class<?> configurationClass) {
     return this.translate(configurationClass, this.codec(configurationClass));
   }
@@ -160,8 +161,8 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
   }
 
   @Override
-  public <T, U extends LogicalModel.Configuration> U logicalModelFor(final PatchBay loader, final Class<T> configurationClass) {
-    return (U)this.translate(configurationClass);
+  public LogicalModel.Configuration logicalModelFor(final PatchBay loader, final Class<?> configurationClass) {
+    return this.translate(configurationClass);
   }
 
 
@@ -265,6 +266,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
 
   private final Set<String> keys(final Type t) {
     return switch (t) {
+    case null -> Set.of();
     case Class<?> c -> this.keys(c);
     case ParameterizedType p -> this.keys(p.getRawType());
     default -> Set.of();
@@ -276,6 +278,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
                                  final String fieldName,
                                  final C codec) {
     return switch (t) {
+    case null -> null;
     case Class<?> c -> this.methodFor(c, objectNode, fieldName, codec);
     case ParameterizedType p -> this.methodFor(p.getRawType(), objectNode, fieldName, codec);
     default -> null;
@@ -335,18 +338,18 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
 
   // Is c a List?
   private static final boolean list(final Class<?> c) {
-    return List.class.isAssignableFrom(c);
+    return c != null && List.class.isAssignableFrom(c);
   }
 
   // Is t a List?
   private static final boolean list(final Type t) {
     return switch (t) {
+    case null -> false;
     case Class<?> c -> list(c);
     case ParameterizedType p -> list(p.getRawType());
     default -> false;
     };
   }
-
 
 
   /*

@@ -12,6 +12,11 @@
  * specific language governing permissions and limitations under the License.
  */
 
+import io.github.ljnelson.patchbay.PatchBay.LogicalModelProvider;
+
+import io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties.JacksonSystemPropertiesLogicalModelProvider;
+import io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties.JacksonEnvironmentVariablesLogicalModelProvider;
+
 module io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties {
 
   exports io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties;
@@ -21,5 +26,9 @@ module io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties {
   requires transitive io.github.ljnelson.patchbay;
 
   requires transitive io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared;
+
+  provides LogicalModelProvider
+    with JacksonSystemPropertiesLogicalModelProvider,
+         JacksonEnvironmentVariablesLogicalModelProvider;
 
 }

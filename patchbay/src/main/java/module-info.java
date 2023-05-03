@@ -16,18 +16,25 @@ import io.github.ljnelson.jakarta.config.Loader;
 
 import io.github.ljnelson.patchbay.PatchBay;
 import io.github.ljnelson.patchbay.PatchBay.ConfigurationObjectProvider;
+import io.github.ljnelson.patchbay.PatchBay.LogicalModelProvider;
 import io.github.ljnelson.patchbay.PatchBay.ServiceLoaderConfigurationObjectProvider;
 
 module io.github.ljnelson.patchbay {
 
   exports io.github.ljnelson.patchbay;
-  
+
   requires transitive io.github.ljnelson.jakarta.config.api;
 
   requires            jdk.incubator.concurrent;
 
   provides Loader with PatchBay;
 
+  uses PatchBay.Configuration;
+
+  uses PatchBay.Configuration.Coordinates;
+  
+  uses LogicalModelProvider;
+  
   uses ConfigurationObjectProvider;
 
   provides ConfigurationObjectProvider with ServiceLoaderConfigurationObjectProvider;

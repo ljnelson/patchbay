@@ -20,18 +20,23 @@ import com.fasterxml.jackson.core.TreeNode;
 import com.fasterxml.jackson.dataformat.javaprop.JavaPropsMapper;
 import com.fasterxml.jackson.dataformat.javaprop.JavaPropsSchema;
 
-public final class JacksonSystemPropertiesLogicalModelProvider extends JacksonPropertiesLogicalModelProvider {
+public final class JacksonEnvironmentVariablesLogicalModelProvider extends JacksonPropertiesLogicalModelProvider {
 
-  public JacksonSystemPropertiesLogicalModelProvider() {
+  public JacksonEnvironmentVariablesLogicalModelProvider() {
     super();
   }
 
+  @Override
+  public final int priority() {
+    return 50; // "first priority" priority, not "lowest priority" priority
+  }
+  
   @Override
   protected final TreeNode treeNode(final Class<?> configurationClass, final JavaPropsMapper codec) throws IOException {
     final TreeNode x = codec.createObjectNode();
     @SuppressWarnings("unchecked")
     final Class<TreeNode> c = (Class<TreeNode>)x.getClass();
-    return codec.readSystemPropertiesAs(JavaPropsSchema.emptySchema().withoutPathSeparator(), c);
+    return codec.readEnvVariablesAs(JavaPropsSchema.emptySchema().withoutPathSeparator(), c);
   }
   
 }

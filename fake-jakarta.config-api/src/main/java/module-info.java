@@ -19,4 +19,6 @@ module io.github.ljnelson.jakarta.config.api {
 
   exports io.github.ljnelson.jakarta.config;
 
+  uses io.github.ljnelson.jakarta.config.Loader;
+
 }

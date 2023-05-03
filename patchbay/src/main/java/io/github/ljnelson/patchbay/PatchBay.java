@@ -18,10 +18,13 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
+
+import java.util.function.Function;
 
 import io.github.ljnelson.jakarta.config.ConfigException;
 import io.github.ljnelson.jakarta.config.InvalidConfigurationClassException;
@@ -53,7 +56,9 @@ public final class PatchBay implements Loader {
 
   private final ClassValue<ConfigurationObjectProvider> configurationObjectProvidersByClass;
 
-  private final ClassValue<LogicalModelProvider> logicalModelProvidersByClass;
+  private final ClassValue<List<LogicalModelProvider>> logicalModelProvidersByClass;
+
+  private final ClassValue<LogicalModel.Configuration> logicalModelsByClass;
 
 
   /*
@@ -63,12 +68,13 @@ public final class PatchBay implements Loader {
 
   @Deprecated // for ServiceLoader usage
   public PatchBay() {
-    this(Configuration.of());
+    this(ServiceLoaderConfiguration.INSTANCE);
   }
 
   public PatchBay(final Configuration configuration) {
     super();
     this.coordinates = Objects.requireNonNull(configuration.coordinates(), "configuration.coordinates()");
+
     final List<ConfigurationObjectProvider> unsortedConfigurationObjectProviders = new ArrayList<>(configuration.configurationObjectProviders());
     Collections.sort(unsortedConfigurationObjectProviders, Comparator.comparingInt(ConfigurationObjectProvider::priority)); // "first priority" priority, not "highest priority" priority
     final List<ConfigurationObjectProvider> configurationObjectProviders = Collections.unmodifiableList(unsortedConfigurationObjectProviders);
@@ -78,15 +84,24 @@ public final class PatchBay implements Loader {
           return PatchBay.this.computeConfigurationObjectProviderFor(configurationObjectProviders, configurationClass);
         }
       };
+
     final List<LogicalModelProvider> unsortedLogicalModelProviders = new ArrayList<>(configuration.logicalModelProviders());
     Collections.sort(unsortedLogicalModelProviders, Comparator.comparingInt(LogicalModelProvider::priority)); // "first priority" priority, not "highest priority" priority
     final List<LogicalModelProvider> logicalModelProviders = Collections.unmodifiableList(unsortedLogicalModelProviders);
     this.logicalModelProvidersByClass = new ClassValue<>() {
         @Override
-        protected final LogicalModelProvider computeValue(final Class<?> configurationClass) {
-          return PatchBay.this.computeLogicalModelProviderFor(logicalModelProviders, configurationClass);
+        protected final List<LogicalModelProvider> computeValue(final Class<?> configurationClass) {
+          return PatchBay.this.computeLogicalModelProvidersFor(logicalModelProviders, configurationClass);
         }
       };
+
+    this.logicalModelsByClass = new ClassValue<>() {
+        @Override
+        protected final LogicalModel.Configuration computeValue(final Class<?> configurationClass) {
+          return PatchBay.this.computeLogicalModelFor(configurationClass);
+        }
+      };
+
     for (final ConfigurationObjectProvider provider : configurationObjectProviders) {
       provider.configure(this);
     }
@@ -115,7 +130,7 @@ public final class PatchBay implements Loader {
       throw new NoSuchObjectException();
     }
     try {
-      return ScopedValue.where(LOAD_REQUEST, configurationClass, () -> this.findConfigurationObjectFor(this.findLogicalModelFor(configurationClass), configurationClass));
+      return ScopedValue.where(LOAD_REQUEST, configurationClass, () -> this.findConfigurationObjectFor(this.logicalModel(configurationClass), configurationClass));
     } catch (final RuntimeException e) {
       throw e;
     } catch (final Exception e) {
@@ -125,6 +140,10 @@ public final class PatchBay implements Loader {
 
   public final Configuration.Coordinates coordinates() {
     return this.coordinates;
+  }
+
+  public final LogicalModel.Configuration logicalModel(final Class<?> c) {
+    return this.logicalModelsByClass.get(c);
   }
 
 
@@ -148,25 +167,36 @@ public final class PatchBay implements Loader {
     }
   }
 
-  private final <T, L extends LogicalModel.Configuration> L findLogicalModelFor(final Class<T> configurationClass) {
-    final LogicalModelProvider logicalModelProvider = this.logicalModelProvidersByClass.get(configurationClass);
-    if (logicalModelProvider == null) {
+  private final LogicalModel.Configuration computeLogicalModelFor(final Class<?> configurationClass) {
+    final List<LogicalModelProvider> logicalModelProviders = this.logicalModelProvidersByClass.get(configurationClass);
+    if (logicalModelProviders.isEmpty()) {
       throw new NoSuchObjectException();
     }
-    return logicalModelProvider.logicalModelFor(this, configurationClass);
+    LogicalModel.Configuration defaults = LogicalModel.Configuration.of();
+    LogicalModel.Configuration logicalModel = null;
+    for (int i = logicalModelProviders.size() - 1; i >= 0; i--) {
+      logicalModel = logicalModelProviders.get(i).logicalModelFor(this, configurationClass);
+      if (logicalModel != null) {
+        logicalModel = new LogicalModel.ConfigurationWithDefaults(logicalModel, defaults);
+      }
+      defaults = logicalModel;
+    }
+    return logicalModel == null ? defaults : logicalModel;
   }
 
   // Called once, ever, from a ClassValue.
-  private final LogicalModelProvider computeLogicalModelProviderFor(final List<LogicalModelProvider> logicalModelProviders, final Class<?> configurationClass) {
+  private final List<LogicalModelProvider> computeLogicalModelProvidersFor(final List<LogicalModelProvider> logicalModelProviders, final Class<?> configurationClass) {
+    final ArrayList<LogicalModelProvider> list = new ArrayList<>(logicalModelProviders.size());
     for (final LogicalModelProvider logicalModelProvider : logicalModelProviders) {
       if (logicalModelProvider.accepts(this, configurationClass)) {
-        return logicalModelProvider;
+        list.add(logicalModelProvider);
       }
     }
-    return null;
+    list.trimToSize();
+    return Collections.unmodifiableList(list);
   }
 
-  private final <L extends LogicalModel.Configuration, T, U extends T> T findConfigurationObjectFor(final L logicalModel, final Class<T> configurationClass) {
+  private final <T> T findConfigurationObjectFor(final LogicalModel.Configuration logicalModel, final Class<T> configurationClass) {
     final ConfigurationObjectProvider configurationObjectProvider = this.configurationObjectProvidersByClass.get(configurationClass);
     assert configurationObjectProvider != null;
     return configurationObjectProvider.configurationObjectFor(this, logicalModel, configurationClass);
@@ -306,7 +336,7 @@ public final class PatchBay implements Loader {
       public default boolean expected() {
         return true;
       }
-      
+
       public default Kind kind() {
         return Kind.OTHER;
       }
@@ -339,7 +369,7 @@ public final class PatchBay implements Loader {
       public static final Absence ofUnexpected() {
         return EXPECTED;
       }
-      
+
     }
 
     public static final record RawValue(boolean expected, Object value) implements LogicalModel.Value {
@@ -352,7 +382,7 @@ public final class PatchBay implements Loader {
       public final Value.Kind kind() {
         return Kind.RAW;
       }
-      
+
       @Override
         public final String toString() {
         return String.valueOf(this.value());
@@ -361,7 +391,7 @@ public final class PatchBay implements Loader {
       public static final RawValue of(final boolean expected, final Object value) {
         return new RawValue(expected, value);
       }
-      
+
     }
 
     public static interface ListValue extends Value {
@@ -416,6 +446,46 @@ public final class PatchBay implements Loader {
 
     }
 
+    static final class ConfigurationWithDefaults implements Configuration {
+
+      private final Set<String> keys;
+
+      private final Function<? super String, ? extends Value> f;
+
+      private final Configuration defaults;
+
+      ConfigurationWithDefaults(final Configuration c, final Configuration defaults) {
+        super();
+        final Set<String> keys = new HashSet<>(c.keys());
+        keys.addAll(defaults.keys());
+        this.keys = Collections.unmodifiableSet(keys);
+        this.defaults = defaults == null ? Configuration.of() : defaults;
+        this.f = k -> {
+          final Value v = c.value(k);
+          if (v == null) {
+            return this.defaults().value(k);
+          }
+          return v;
+        };
+      }
+
+      @Override
+      public final Configuration defaults() {
+        return this.defaults;
+      }
+
+      @Override
+      public final Set<String> keys() {
+        return this.keys;
+      }
+
+      @Override
+      public final Value value(final String key) {
+        return this.f.apply(key);
+      }
+
+    }
+
   }
 
   public static interface Provider {
@@ -423,19 +493,21 @@ public final class PatchBay implements Loader {
     public default void configure(final PatchBay loader) {
 
     }
-    
+
   }
-  
+
   // A PatchBay.Provider that gets a glop of configuration relevant for a configuration class.
   public static interface LogicalModelProvider extends Provider {
 
-    public default <T, U extends LogicalModel.Configuration> U logicalModelFor(final PatchBay loader,
-                                                                               final Class<T> configurationClass) {
+    public static final int DEFAULT_PRIORITY = 100;
+
+    public default LogicalModel.Configuration logicalModelFor(final PatchBay loader,
+                                                              final Class<?> configurationClass) {
       return null;
     }
 
-    public default int priority() {
-      return 0;
+    public default int priority() { // "first priority" priority, not "lowest priority" priority
+      return DEFAULT_PRIORITY;
     }
 
     public default boolean accepts(final PatchBay loader, final Class<?> configurationClass) {
@@ -447,22 +519,57 @@ public final class PatchBay implements Loader {
   // Something that makes a configuration object.
   public static interface ConfigurationObjectProvider extends Provider {
 
+    public static final int DEFAULT_PRIORITY = 100;
+
     // Precondition: configurationClass is actually a valid configuration class
-    public default <L extends LogicalModel.Configuration, T, U extends T> U configurationObjectFor(final PatchBay loader,
-                                                                                                   final L logicalModel,
-                                                                                                   final Class<T> configurationClass)
+    public default <T, U extends T> U configurationObjectFor(final PatchBay loader,
+                                                             final LogicalModel.Configuration logicalModel,
+                                                             final Class<T> configurationClass)
     {
       return null;
     }
 
-    public default int priority() {
-      return 0;
+    public default int priority() { // "last priority" priority, not "highest priority"
+      return DEFAULT_PRIORITY;
     }
 
     public default boolean accepts(final PatchBay loader, final Class<?> configurationClass) {
       return true;
     }
 
+  }
+
+  public static final class ServiceLoaderConfiguration implements Configuration {
+
+    private static final ServiceLoaderConfiguration INSTANCE = new ServiceLoaderConfiguration();
+    
+    public ServiceLoaderConfiguration() {
+      super();
+    }
+
+    @Override
+    public final List<ConfigurationObjectProvider> configurationObjectProviders() {
+      return ServiceLoader.load(ConfigurationObjectProvider.class)
+        .stream()
+        .map(ServiceLoader.Provider::get)
+        .toList();
+    }
+
+    @Override
+    public final List<LogicalModelProvider> logicalModelProviders() {
+      return ServiceLoader.load(LogicalModelProvider.class)
+        .stream()
+        .map(ServiceLoader.Provider::get)
+        .toList();
+    }
+
+    @Override
+    public final Coordinates coordinates() {
+      return ServiceLoader.load(Coordinates.class)
+        .findFirst()
+        .orElseGet(Coordinates::of);
+    }    
+    
   }
 
   // A default ConfigurationObjectProvider that is the last fallback and the one used for bootstrapping.
@@ -488,20 +595,11 @@ public final class PatchBay implements Loader {
 
     @Override
     @SuppressWarnings("unchecked")
-    public final <L extends LogicalModel.Configuration, T, U extends T> U configurationObjectFor(final PatchBay ignoredLoader,
-                                                                                                 final L ignoredLogicalModel,
-                                                                                                 final Class<T> configurationClass)
+    public final <T, U extends T> U configurationObjectFor(final PatchBay ignoredLoader,
+                                                           final LogicalModel.Configuration ignoredLogicalModel,
+                                                           final Class<T> configurationClass)
     {
       return (U)configurationObjects.get(configurationClass);
-    }
-
-    // TODO: dormant for the time being
-    private final <T> T computeConfigurationObjectFor(final Class<T> configurationClass) {
-      final T t = ServiceLoader.load(configurationClass).findFirst().orElseThrow(NoSuchObjectException::new);
-      if (t instanceof Provider p) {
-        p.configure(null);
-      }
-      return t;
     }
 
   }

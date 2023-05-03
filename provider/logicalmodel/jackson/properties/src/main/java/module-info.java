@@ -16,6 +16,8 @@ module io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties {
 
   exports io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties;
 
+  requires transitive com.fasterxml.jackson.dataformat.javaprop;
+  
   requires transitive io.github.ljnelson.patchbay;
 
   requires transitive io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared;

@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.ObjectCodec;
@@ -47,8 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class TestTranslation {
 
-  private AbstractJacksonLogicalModelProvider p;
-
   private ObjectMapper codec;
 
   private TestTranslation() {
@@ -57,13 +56,14 @@ final class TestTranslation {
 
   @BeforeEach
   final void setUp() {
-    this.p = new AbstractJacksonLogicalModelProvider() {};
-    this.codec = new ObjectMapper();
+    final ObjectMapper codec = new ObjectMapper();
+    this.codec = codec;
   }
 
   @Test
   final void testExpectedKeys() {
-    final Set<String> keys = this.p.keys(TraversingConfiguration.class);
+    final Provider p = new Provider();
+    final Set<String> keys = p.keys(TraversingConfiguration.class);
     assertEquals(3, keys.size());
     assertTrue(keys.contains("toString"));
     assertTrue(keys.contains("fieldA"));
@@ -72,7 +72,15 @@ final class TestTranslation {
 
   @Test
   final void testTranslate() throws JsonProcessingException {
-    final AbstractJacksonLogicalModelProvider p = new AbstractJacksonLogicalModelProvider() {
+    final Provider p = new Provider("""
+                                    {
+                                      "fieldA" : "valueA",
+                                        "fieldB" : {
+                                        "fieldC" : "valueC",
+                                          "fieldD" : "valueD"
+                                          }
+                                    }
+                                    """) {
         @Override
         protected String keyFor(final Method m) {
           final String methodName = m.getName();
@@ -82,16 +90,7 @@ final class TestTranslation {
           return super.keyFor(m);
         }
       };
-    final TreeNode treeNode = codec.readTree("""
-                                             {
-                                               "fieldA" : "valueA",
-                                               "fieldB" : {
-                                                 "fieldC" : "valueC",
-                                                 "fieldD" : "valueD"
-                                               }
-                                             }
-                                             """);
-    final LogicalModel.Configuration top = p.translate(TraversingConfiguration.class, treeNode, codec);
+    final LogicalModel.Configuration top = p.translate(TraversingConfiguration.class);
     assertEquals(Set.of("fieldA", "fieldB"), top.keys());
     final LogicalModel.Value a = top.value("fieldA");
     final LogicalModel.Configuration b = (LogicalModel.Configuration)top.value("fieldB");
@@ -104,56 +103,33 @@ final class TestTranslation {
     assertNull(missing); // for now
   }
 
-  /*
-  @Test
-  final void testKeysForMethod() throws NoSuchMethodException {
-    final Method fieldA = TraversingConfiguration.class.getMethod("fieldA");
-    assertEquals(Set.of(), Set.copyOf(this.p.keys(fieldA)));
-    final Method fieldB = TraversingConfiguration.class.getMethod("fieldB");
-    assertEquals(Set.of("fieldC"), Set.copyOf(this.p.keys(fieldB)));
-  }
-  */
+  private static class Provider extends AbstractJacksonLogicalModelProvider<ObjectCodec, JsonFactory> {
 
-  /*
-  @Test
-  final void testTranslation() throws IOException, ReflectiveOperationException {
-    final TreeNode treeNode = codec.readTree("{ \"frequency\" : 32,\n  \"removeMe\" : \"should not see this\"\n}");
-    final LogicalModel.Configuration c = p.translate(SampleConfigurationClass.class, treeNode, codec);
-    assertSame(LogicalModel.Value.Kind.CONFIGURATION, c.kind());
-    assertEquals(Set.of("frequency"), c.keys());
-    assertEquals(LogicalModel.Value.ofRaw("32"), c.value("frequency"));
-  }
-  */
+    private final ObjectCodec codec;
+    
+    private final String json;
 
-  /*
-  @Test
-  final void testTraversingWithTreeNodes() throws IOException {
-    final AbstractJacksonLogicalModelProvider p = new AbstractJacksonLogicalModelProvider() {
-        @Override
-        protected String keyFor(final Method m) {
-          final String methodName = m.getName();
-          if (methodName.equals("fieldA") || methodName.equals("toString")) {
-            return null;
-          }
-          return super.keyFor(m);
-        }
-      };
-    final JsonParser parser =
-      codec.createParser("""
-                         {
-                           "fieldA" : "valueA",
-                           "fieldB" : {
-                             "fieldC" : "valueC",
-                             "fieldD" : "valueD"
-                           }
-                         }
-                         """);
-    final TreeNode treeNode = parser.readValueAsTree();
-    final LogicalModel.Configuration c = p.translate(TraversingConfiguration.class, treeNode, codec);
-    assertEquals(Set.of("fieldB"), c.keys()); // XXX fails because toString()
+    private Provider() {
+      this("{}");
+    }
+    
+    private Provider(String json) {
+      super();
+      this.codec = new ObjectMapper();
+      this.json = Objects.requireNonNull(json);
+    }
+    
+    @Override
+    protected final ObjectCodec codec(final Class<?> configurationClass) {
+      return this.codec;
+    }
+    
+    protected final JsonParser parser(final Class<?> configurationClass, final JsonFactory f) throws IOException {
+      return f.createParser(this.json);
+    }
+    
   }
-  */
-
+  
   private static interface SampleConfigurationClass {
 
     public default int frequency() {

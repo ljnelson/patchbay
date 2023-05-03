@@ -13,29 +13,22 @@
  */
 package io.github.ljnelson.patchbay.provider.logicalmodel.jackson.properties;
 
-import java.util.Objects;
+import java.io.IOException;
 
-import com.fasterxml.jackson.dataformat.javaprop.JavaPropsFactory;
+import com.fasterxml.jackson.core.TreeNode;
+
 import com.fasterxml.jackson.dataformat.javaprop.JavaPropsMapper;
+import com.fasterxml.jackson.dataformat.javaprop.JavaPropsSchema;
 
-import io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared.AbstractJacksonLogicalModelProvider;
+public final class JacksonSystemPropertiesLogicalModelProvider extends JacksonPropertiesLogicalModelProvider {
 
-public abstract class JacksonPropertiesLogicalModelProvider extends AbstractJacksonLogicalModelProvider<JavaPropsMapper, JavaPropsFactory> {
-
-  private final JavaPropsMapper codec;
-
-  protected JacksonPropertiesLogicalModelProvider() {
-    this(new JavaPropsMapper());
-  }
-  
-  protected JacksonPropertiesLogicalModelProvider(final JavaPropsMapper codec) {
+  public JacksonSystemPropertiesLogicalModelProvider() {
     super();
-    this.codec = Objects.requireNonNull(codec, "codec");
   }
 
   @Override
-  protected JavaPropsMapper codec(final Class<?> c) {
-    return this.codec;
+  protected final TreeNode treeNode(final Class<?> configurationClass, final JavaPropsMapper codec) throws IOException {
+    return codec.readSystemPropertiesAs(JavaPropsSchema.emptySchema(), TreeNode.class);
   }
-
+  
 }

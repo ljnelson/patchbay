@@ -13,6 +13,8 @@
  */
 package io.github.ljnelson.patchbay;
 
+import java.lang.System.Logger;
+
 import java.lang.reflect.Method;
 
 import java.util.ArrayList;
@@ -33,8 +35,12 @@ import io.github.ljnelson.jakarta.config.NoSuchObjectException;
 
 import jdk.incubator.concurrent.ScopedValue;
 
+import static java.lang.System.Logger.Level.DEBUG;
+
 public final class PatchBay implements Loader {
 
+  private static final Logger logger = System.getLogger(PatchBay.class.getName());
+  
   private static final ClassValue<Boolean> IS_CONFIGURATION_CLASS = new ClassValue<>() {
       @Override
       protected final Boolean computeValue(final Class<?> c) {
@@ -107,6 +113,10 @@ public final class PatchBay implements Loader {
     }
     for (final LogicalModelProvider provider : logicalModelProviders) {
       provider.configure(this);
+    }
+    if (logger.isLoggable(DEBUG)) {
+      logger.log(DEBUG, "configurationObjectProviders: " + configurationObjectProviders);
+      logger.log(DEBUG, "logicalModelProviders: " + logicalModelProviders);
     }
   }
 
@@ -193,6 +203,21 @@ public final class PatchBay implements Loader {
       }
     }
     list.trimToSize();
+    if (logger.isLoggable(DEBUG)) {
+      final StringBuilder sb = new StringBuilder("computed LogicalModelProviders for ")
+        .append(configurationClass)
+        .append(":\n");
+      for (int i = 0; i < list.size(); i++) {
+        final LogicalModelProvider p = list.get(i);
+        sb.append(i + 1)
+          .append(": ")
+          .append(p)
+          .append(" (priority: ")
+          .append(p.priority())
+          .append(")\n");
+      }
+      logger.log(DEBUG, sb.toString());
+    }
     return Collections.unmodifiableList(list);
   }
 
@@ -448,6 +473,8 @@ public final class PatchBay implements Loader {
 
     static final class ConfigurationWithDefaults implements Configuration {
 
+      private static final System.Logger logger = System.getLogger(ConfigurationWithDefaults.class.getName());
+      
       private final Set<String> keys;
 
       private final Function<? super String, ? extends Value> f;
@@ -461,9 +488,15 @@ public final class PatchBay implements Loader {
         this.keys = Collections.unmodifiableSet(keys);
         this.defaults = defaults == null ? Configuration.of() : defaults;
         this.f = k -> {
-          final Value v = c.value(k);
+          Value v = c.value(k);
           if (v == null) {
-            return this.defaults().value(k);
+            if (logger.isLoggable(DEBUG)) {
+              logger.log(DEBUG, "null value found for \"" + k + "\"; getting default");
+            }
+            v = this.defaults().value(k);
+          }
+          if (logger.isLoggable(DEBUG)) {
+            logger.log(DEBUG, k + " = " + v);
           }
           return v;
         };

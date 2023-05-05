@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>patchbay-provider-logicalmodel-jackson-shared</artifactId>
+  <artifactId>patchbay-provider-logicalmodel-jackson-applicationjson</artifactId>
 
   <parent>
     <groupId>io.github.ljnelson</groupId>
@@ -11,8 +11,8 @@
     <relativePath>../../../../../pom.xml</relativePath>
   </parent>
 
-  <name>PatchBay: Provider: Logical Model: Jackson: Shared</name>
-  <description>PatchBay: Provider: Logical Model: Jackson: Shared: Shared classes for implementing Jackson-based LogicalModelProviders.</description>
+  <name>PatchBay: Provider: Logical Model: Jackson: application.json</name>
+  <description>PatchBay: Provider: Logical Model: Jackson: application.json: A LogicalModelProvider that loads application.json</description>
 
   <dependencies>
 
@@ -21,6 +21,13 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-core</artifactId>
+      <type>jar</type>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
       <type>jar</type>
       <scope>compile</scope>
     </dependency>
@@ -39,16 +46,16 @@
       <scope>compile</scope>
     </dependency>
 
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>patchbay-provider-logicalmodel-jackson-shared</artifactId>
+      <type>jar</type>
+      <scope>compile</scope>
+    </dependency>
+
 
     <!-- Test-scoped dependencies. -->
 
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <type>jar</type>
-      <scope>test</scope>
-    </dependency>
-    
     <dependency>
       <groupId>org.hamcrest</groupId>
       <artifactId>hamcrest</artifactId>
@@ -70,6 +77,30 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>patchbay-provider-logicalmodel-jackson-environment</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+    
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>
+            --add-modules=java.logging,org.junit.jupiter.engine
+            --enable-preview
+          </argLine>
+          <systemPropertyVariables>
+            <java.util.logging.config.file>src/test/logging.properties</java.util.logging.config.file>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>

@@ -1,0 +1,2 @@
+# Required for non-modular applications.
+io.github.ljnelson.patchbay.PatchBay.ServiceLoaderConfigurationObjectProvider

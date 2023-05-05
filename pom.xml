@@ -67,7 +67,8 @@
     <module>fake-jakarta.config-api</module>
     <module>patchbay</module>
     <module>provider/configurationobject/proxy</module>
-    <module>provider/logicalmodel/jackson/properties</module>
+    <module>provider/logicalmodel/jackson/applicationjson</module>
+    <module>provider/logicalmodel/jackson/environment</module>
     <module>provider/logicalmodel/jackson/shared</module>
     <module>provider/logicalmodel/shared</module>
   </modules>
@@ -130,6 +131,20 @@
         <type>jar</type>
       </dependency>
 
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>patchbay-provider-logicalmodel-jackson-applicationjson</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>patchbay-provider-logicalmodel-jackson-environment</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+      </dependency>
+      
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>patchbay-provider-logicalmodel-jackson-shared</artifactId>

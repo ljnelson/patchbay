@@ -1,0 +1,3 @@
+# Required for non-modular applications.
+io.github.ljnelson.patchbay.provider.logicalmodel.jackson.environment.JacksonEnvironmentVariablesLogicalModelProvider
+io.github.ljnelson.patchbay.provider.logicalmodel.jackson.environment.JacksonSystemPropertiesLogicalModelProvider

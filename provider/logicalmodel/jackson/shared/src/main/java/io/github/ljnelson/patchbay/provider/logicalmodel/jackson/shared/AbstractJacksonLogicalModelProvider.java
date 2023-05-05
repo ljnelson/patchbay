@@ -13,7 +13,11 @@
  */
 package io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+
+import java.lang.System.Logger;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -49,12 +53,16 @@ import io.github.ljnelson.patchbay.PatchBay;
 import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
 import io.github.ljnelson.patchbay.PatchBay.LogicalModelProvider;
 
+import static java.lang.System.Logger.Level.DEBUG;
+
 public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec, F extends JsonFactory> implements LogicalModelProvider {
 
 
   /*
    * Static fields.
    */
+
+  private static final Logger logger = System.getLogger(AbstractJacksonLogicalModelProvider.class.getName());
 
 
   private static final VarHandle CONFIG;
@@ -78,6 +86,10 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
   // below.
   private final ClassValue<Set<String>> keys;
 
+  private final Function<? super Class<?>, ? extends C> codecFunction;
+
+  private final Function<? super Class<?>, ? extends InputStream> inputStreamFunction;
+
   // My configuration.
   private volatile ProviderConfiguration config;
 
@@ -87,7 +99,12 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
    */
 
 
-  protected AbstractJacksonLogicalModelProvider() {
+  protected AbstractJacksonLogicalModelProvider(final Function<? super Class<?>, ? extends C> codecFunction) {
+    this(codecFunction, null);
+  }
+  
+  protected AbstractJacksonLogicalModelProvider(final Function<? super Class<?>, ? extends C> codecFunction,
+                                                final Function<? super Class<?>, ? extends InputStream> inputStreamFunction) {
     super();
     this.keys = new ClassValue<>() {
         @Override
@@ -95,7 +112,8 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
           return AbstractJacksonLogicalModelProvider.this.computeKeys(c);
         }
       };
-
+    this.codecFunction = Objects.requireNonNull(codecFunction, "codecFunction");
+    this.inputStreamFunction = inputStreamFunction == null ? c -> null : inputStreamFunction;
   }
 
 
@@ -104,11 +122,25 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
    */
 
 
-  protected abstract C codec(final Class<?> configurationClass);
+  protected final C codec(final Class<?> configurationClass) {
+    return this.codecFunction.apply(configurationClass);
+  }
 
   protected JsonParser parser(final Class<?> configurationClass, final F f) throws IOException {
-    return null;
+    final InputStream inputStream = this.inputStream(configurationClass);
+    if (inputStream == null) {
+      if (logger.isLoggable(DEBUG)) {
+        logger.log(DEBUG, "No InputStream for " + configurationClass);
+      }
+      return null;
+    }
+    return f.createParser(inputStream);
   }
+
+  protected final InputStream inputStream(final Class<?> configurationClass) {
+    return this.inputStreamFunction.apply(configurationClass);
+  }
+
 
   @Override
   public void configure(final PatchBay loader) {
@@ -125,17 +157,27 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     if (parser == null) {
       return codec.createObjectNode();
     }
-    parser.setCodec(codec);
-    return parser.readValueAsTree();
+    TreeNode treeNode;
+    try {
+      parser.setCodec(codec);
+      treeNode = parser.readValueAsTree();
+    } finally {
+      parser.close();
+    }
+    return treeNode;
   }
 
-  protected final LogicalModel.Configuration translate(final Class<?> configurationClass) {
+  public final LogicalModel.Configuration translate(final Class<?> configurationClass) {
     return this.translate(configurationClass, this.codec(configurationClass));
   }
 
   protected LogicalModel.Configuration translate(final Class<?> configurationClass, final C codec) {
     try {
-      return this.translate(configurationClass, this.treeNode(configurationClass, codec), codec);
+      final TreeNode treeNode = this.treeNode(configurationClass, codec);
+      if (logger.isLoggable(DEBUG)) {
+        logger.log(DEBUG, "treeNode: " + treeNode);
+      }
+      return this.translate(configurationClass, treeNode, codec);
     } catch (final IOException e) {
       throw new ConfigException(e.getMessage(), e);
     }
@@ -148,7 +190,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
 
   // Given a configuration class, return a Collection of canonical representations of configuration keys it logically
   // contains. Probably can move up to PatchBay level.
-  final Set<String> keys(final Class<?> c) {
+  public final Set<String> keys(final Class<?> c) {
     return this.keys.get(c);
   }
 
@@ -201,25 +243,21 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     if (!objectNode.isObject()) {
       throw new IllegalArgumentException();
     }
-    if (objectNode.size() == 0) {
-      return LogicalModel.Configuration.of();
-    }
     final Map<String, LogicalModel.Value> map = new HashMap<>();
-    final Set<String> expectedKeys = this.keys(t); // TODO: use
     final Iterator<String> fieldNamesIterator = objectNode.fieldNames();
+    final Set<String> expectedKeys = this.keys(t);
     while (fieldNamesIterator.hasNext()) {
-      final String fn = fieldNamesIterator.next();
-      final String key = fieldNameToKey(fn);
-      final Method accessor = this.methodFor(t, objectNode, fn, codec);
-      map.put(fn, translateTreeNode(accessor == null ? null : accessor.getGenericReturnType(),
-                                    key != null && expectedKeys.contains(key), // was it an expected value or not?
-                                    objectNode.get(fn),
-                                    codec));
+      final String fieldName = fieldNamesIterator.next();
+      final String key = this.fieldNameToKey(fieldName, expectedKeys);
+      map.put(key, this.translateTreeNode(this.typeFor(t, key),
+                                          key != null && expectedKeys.contains(key), // was it an expected value or not?
+                                          objectNode.get(fieldName), // (will never be null)
+                                          codec));
     }
     return new AbstractJacksonLogicalModelProvider.Configuration(expected, expectedKeys, map);
   }
 
-  private final String fieldNameToKey(final String fieldName) { // TODO: could be richer to permit some other strategy?
+  private final String fieldNameToKey(final String fieldName, final Set<String> expectedKeys) { // TODO: could be richer to permit some other strategy?
     return fieldName;
   }
 
@@ -273,32 +311,26 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     };
   }
 
-  private final Method methodFor(final Type t,
-                                 final TreeNode objectNode,
-                                 final String fieldName,
-                                 final C codec) {
+  private final Type typeFor(final Type t, final String key) {
     return switch (t) {
     case null -> null;
-    case Class<?> c -> this.methodFor(c, objectNode, fieldName, codec);
-    case ParameterizedType p -> this.methodFor(p.getRawType(), objectNode, fieldName, codec);
+    case Class<?> c -> this.typeFor(c, key);
+    case ParameterizedType p -> this.typeFor(p.getRawType(), key);
     default -> null;
     };
   }
 
-  private final Method methodFor(final Class<?> c, // nullable
-                                 final TreeNode objectNode,
-                                 final String fieldName,
-                                 final C codec) {
+  private final Type typeFor(final Class<?> c, final String key) {
     if (!PatchBay.configurationClass(c)) {
       return null;
     }
     Method m;
     try {
-      m = c.getMethod(fieldName);
+      m = c.getMethod(key);
     } catch (final NoSuchMethodException e) {
       return null;
     }
-    return PatchBay.configurationKey(m) ? m : null;
+    return PatchBay.configurationKey(m) ? m.getGenericReturnType() : null;
   }
 
   // Given a Class, if it is a configuration class, return the set of canonical representations of the configuration

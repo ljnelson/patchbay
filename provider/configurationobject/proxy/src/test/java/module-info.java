@@ -12,19 +12,18 @@
  * specific language governing permissions and limitations under the License.
  */
 
-import io.github.ljnelson.patchbay.PatchBay.ConfigurationObjectProvider;
+module test {
 
-import io.github.ljnelson.patchbay.provider.configurationobject.proxy.ProxyBasedConfigurationObjectProvider;
-
-@SuppressWarnings("module")
-module io.github.ljnelson.patchbay.provider.configurationobject.proxy {
-
-  exports io.github.ljnelson.patchbay.provider.configurationobject.proxy to test;
+  // Open our test package to JUnit
+  opens test to org.junit.platform.commons;
   
-  requires transitive io.github.ljnelson.patchbay;
+  // The module under test
+  requires transitive io.github.ljnelson.patchbay.provider.configurationobject.proxy;
 
-  requires transitive io.github.ljnelson.jakarta.config.api;
+  requires org.junit.jupiter.api;
 
-  provides ConfigurationObjectProvider with ProxyBasedConfigurationObjectProvider;
-
+  // This bothers me. It is clear that the engine must be on the module path at test time, but this test module does not in
+  // fact do anything with it. The "requires" syntax suggests incorrectly that it does. A better approach would be to always and everywhere do --add-modules org.junit.jupiter.engine
+  // requires org.junit.jupiter.engine;
+  
 }

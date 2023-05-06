@@ -58,6 +58,30 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>patchbay-provider-logicalmodel-jackson-applicationjson</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>
+            --add-modules=java.logging,org.junit.jupiter.engine
+            --enable-preview
+          </argLine>
+          <systemPropertyVariables>
+            <java.util.logging.config.file>src/test/logging.properties</java.util.logging.config.file>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  
 </project>

@@ -62,6 +62,8 @@ public final class PatchBay implements Loader {
 
   private final ClassValue<ConfigurationObjectProvider> configurationObjectProvidersByClass;
 
+  private final ClassValue<Object> configurationObjectsByClass;
+
   private final ClassValue<List<LogicalModelProvider>> logicalModelProvidersByClass;
 
   private final ClassValue<io.github.ljnelson.patchbay.logical.Configuration> logicalModelsByClass;
@@ -105,6 +107,12 @@ public final class PatchBay implements Loader {
         }
       };
 
+    this.configurationObjectsByClass = new ClassValue<>() {
+        @Override
+        protected final Object computeValue(final Class<?> configurationClass) {
+          return PatchBay.this.computeConfigurationObject(PatchBay.this.logicalModel(configurationClass), configurationClass);
+        }
+      };
     this.logicalModelsByClass = new ClassValue<>() {
         @Override
         protected final io.github.ljnelson.patchbay.logical.Configuration computeValue(final Class<?> configurationClass) {
@@ -144,7 +152,7 @@ public final class PatchBay implements Loader {
       throw new NoSuchObjectException();
     }
     try {
-      return ScopedValue.where(LOAD_REQUEST, configurationClass, () -> this.findConfigurationObjectFor(this.logicalModel(configurationClass), configurationClass));
+      return ScopedValue.where(LOAD_REQUEST, configurationClass, () -> this.computeConfigurationObject(this.logicalModel(configurationClass), configurationClass));
     } catch (final RuntimeException e) {
       throw e;
     } catch (final Exception e) {
@@ -158,7 +166,7 @@ public final class PatchBay implements Loader {
 
   public final io.github.ljnelson.patchbay.logical.Configuration logicalModel(final Class<?> c) {
     return this.logicalModelsByClass.get(c);
-  }
+  }  
 
 
   /*
@@ -225,7 +233,7 @@ public final class PatchBay implements Loader {
     return Collections.unmodifiableList(list);
   }
 
-  private final <T> T findConfigurationObjectFor(final io.github.ljnelson.patchbay.logical.Configuration logicalModel, final Class<T> configurationClass) {
+  public final <T> T computeConfigurationObject(final io.github.ljnelson.patchbay.logical.Configuration logicalModel, final Class<T> configurationClass) {
     final ConfigurationObjectProvider configurationObjectProvider = this.configurationObjectProvidersByClass.get(configurationClass);
     assert configurationObjectProvider != null;
     return configurationObjectProvider.configurationObjectFor(this, logicalModel, configurationClass);

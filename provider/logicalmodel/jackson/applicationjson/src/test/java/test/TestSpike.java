@@ -16,9 +16,10 @@ package test;
 import io.github.ljnelson.jakarta.config.Loader;
 
 import io.github.ljnelson.patchbay.PatchBay;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel.Configuration;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel.Value;
+
+import io.github.ljnelson.patchbay.logical.Configuration;
+import io.github.ljnelson.patchbay.logical.RawValue;
+import io.github.ljnelson.patchbay.logical.Value;
 
 import io.github.ljnelson.patchbay.provider.logicalmodel.jackson.applicationjson.JacksonApplicationJsonClasspathResourceLogicalModelProvider;
 
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -55,14 +57,13 @@ final class TestSpike {
     assertNotNull(Dummy.class.getResource("/application.json"));
   }
 
-  @Disabled
   @Test
   final void testSpike() {
     final Configuration logicalModel = this.loader.logicalModel(Dummy.class);
-    assertSame(LogicalModel.Value.Kind.CONFIGURATION, logicalModel.kind());
-    Value v = logicalModel.value("nuclearLaunchKey");
-    assertTrue(v.expected());
-    assertSame(LogicalModel.Value.Kind.RAW, v.kind());
+    assertSame(Value.Kind.CONFIGURATION, logicalModel.kind());
+    RawValue v = (RawValue)logicalModel.value("nuclearLaunchKey");
+    assertTrue(v.modeled());
+    assertEquals("SQ3R9", v.value());
   }
 
   public static interface Dummy {

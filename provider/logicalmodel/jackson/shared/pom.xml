@@ -39,6 +39,13 @@
       <scope>compile</scope>
     </dependency>
 
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>patchbay-provider-logicalmodel-shared</artifactId>
+      <type>jar</type>
+      <scope>compile</scope>
+    </dependency>
+
 
     <!-- Test-scoped dependencies. -->
 

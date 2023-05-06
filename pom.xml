@@ -68,6 +68,8 @@
     <module>patchbay</module>
     <module>provider/configurationobject/proxy</module>
     <module>provider/logicalmodel/jackson/applicationjson</module>
+    <module>provider/logicalmodel/jackson/applicationproperties</module>
+    <module>provider/logicalmodel/jackson/applicationtoml</module>
     <module>provider/logicalmodel/jackson/environment</module>
     <module>provider/logicalmodel/jackson/shared</module>
     <module>provider/logicalmodel/shared</module>
@@ -134,6 +136,20 @@
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>patchbay-provider-logicalmodel-jackson-applicationjson</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>patchbay-provider-logicalmodel-jackson-applicationproperties</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>patchbay-provider-logicalmodel-jackson-applicationtoml</artifactId>
         <version>${project.version}</version>
         <type>jar</type>
       </dependency>
@@ -390,7 +406,7 @@
     <bottom><![CDATA[Copyright &copy; ${project.inceptionYear}&ndash;{currentYear}, <a href="${project.organization.url}" target="_top">${project.organization.name}</a>. All rights reserved.]]></bottom>
     <detectJavaApiLink>false</detectJavaApiLink>
     <detectLinks>false</detectLinks>
-    <links>https://docs.oracle.com/en/java/javase/20/docs/api/</links>
+    <links>https://download.java.net/java/early_access/jdk21/docs/api/</links>
 
     <!-- maven-release-plugin properties; see http://maven.apache.org/maven-release/maven-release-plugin/ -->
     <goals>deploy,post-site,scm-publish:publish-scm</goals>

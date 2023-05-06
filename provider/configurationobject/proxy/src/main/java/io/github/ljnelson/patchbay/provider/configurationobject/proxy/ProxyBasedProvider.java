@@ -17,7 +17,8 @@ import io.github.ljnelson.jakarta.config.NoSuchObjectException;
 
 import io.github.ljnelson.patchbay.PatchBay;
 import io.github.ljnelson.patchbay.PatchBay.ConfigurationObjectProvider;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
+
+import io.github.ljnelson.patchbay.logical.Configuration;
 
 public class ProxyBasedProvider implements ConfigurationObjectProvider {
 
@@ -27,7 +28,7 @@ public class ProxyBasedProvider implements ConfigurationObjectProvider {
 
   @Override
   public <T, U extends T> U configurationObjectFor(final PatchBay loader,
-                                                   final LogicalModel.Configuration logicalModel,
+                                                   final Configuration logicalModel,
                                                    final Class<T> configurationClass) {
     throw new NoSuchObjectException();
   }

@@ -13,18 +13,16 @@
  */
 package test;
 
-import io.github.ljnelson.jakarta.config.Loader;
-
 import io.github.ljnelson.patchbay.PatchBay;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel.Configuration;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel.Value;
+
+import io.github.ljnelson.patchbay.logical.Configuration;
+import io.github.ljnelson.patchbay.logical.Value;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,23 +36,26 @@ final class TestSpike {
 
   @BeforeEach
   final void setUp() {
-    this.loader = (PatchBay)Loader.bootstrap();
-    assertNotNull(this.loader);
+    this.loader = new PatchBay();
   }
 
   @Test
   final void testSpike() {
     final Configuration logicalModel = this.loader.logicalModel(Dummy.class);
-    assertSame(LogicalModel.Value.Kind.CONFIGURATION, logicalModel.kind());
+    assertSame(Value.Kind.CONFIGURATION, logicalModel.kind());
     Value v = logicalModel.value("java.home");
-    assertFalse(v.expected()); // Dummy doesn't model it
-    v = logicalModel.value("PATH");
-    if (v != null) {
-      assertTrue(v.expected()); // Dummy models it
+    assertFalse(v.modeled()); // It's there, but Dummy doesn't model it
+    if (System.getenv("PATH") != null) {
+      v = logicalModel.value("PATH");
+      assertTrue(v.modeled()); // Dummy models it
     }
     v = logicalModel.value("nuclearLaunchKey");
-    assertTrue(v.expected());
-    assertSame(LogicalModel.Value.Kind.ABSENCE, v.kind());
+
+    // This is kind of tricky.  It is true that neither the environment nor the set of System properties specifies any
+    // key named "nuclearLaunchKey" (thank goodness).  That means that neither specified its presence, even to set its
+    // value to null.
+
+    assertNull(v);
   }
 
   public static interface Dummy {

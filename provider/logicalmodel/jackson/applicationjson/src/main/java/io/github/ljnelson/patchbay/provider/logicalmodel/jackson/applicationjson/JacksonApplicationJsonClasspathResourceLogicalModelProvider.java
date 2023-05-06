@@ -13,17 +13,12 @@
  */
 package io.github.ljnelson.patchbay.provider.logicalmodel.jackson.applicationjson;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
 import java.lang.System.Logger;
 
 import com.fasterxml.jackson.core.JsonFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
-
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared.AbstractJacksonLogicalModelProvider;
 
@@ -36,7 +31,7 @@ public class JacksonApplicationJsonClasspathResourceLogicalModelProvider extends
   }
 
   public JacksonApplicationJsonClasspathResourceLogicalModelProvider(final ObjectMapper objectMapper) {
-    super(c -> objectMapper.readerFor(ObjectNode.class),
+    super(c -> objectMapper.reader(),
           c -> c.getResourceAsStream("/application.json"));
 
   }

@@ -13,7 +13,6 @@
  */
 package io.github.ljnelson.patchbay.provider.logicalmodel.shared;
 
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
 import io.github.ljnelson.patchbay.PatchBay.LogicalModelProvider;
 
 public abstract class AbstractLogicalModelProvider implements LogicalModelProvider {
@@ -21,9 +20,5 @@ public abstract class AbstractLogicalModelProvider implements LogicalModelProvid
   protected AbstractLogicalModelProvider() {
     super();
   }
-
-  public abstract <T, U extends LogicalModel.Configuration> U logicalModelFor(final Class<T> configurationClass);
-
-  public abstract boolean accepts(final Class<?> configurationClass);
 
 }

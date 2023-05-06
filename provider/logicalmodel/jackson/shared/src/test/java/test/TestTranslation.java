@@ -36,7 +36,8 @@ import com.fasterxml.jackson.core.TreeNode;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
+import io.github.ljnelson.patchbay.logical.Configuration;
+import io.github.ljnelson.patchbay.logical.Value;
 
 import io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared.AbstractJacksonLogicalModelProvider;
 
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -63,9 +65,9 @@ final class TestTranslation {
   }
 
   @Test
-  final void testExpectedKeys() {
+  final void testModeledKeys() {
     final Provider p = new Provider();
-    final Set<String> keys = p.keys(TraversingConfiguration.class);
+    final Set<String> keys = p.modeledKeys(TraversingConfiguration.class);
     assertEquals(3, keys.size());
     assertTrue(keys.contains("toString"));
     assertTrue(keys.contains("fieldA"));
@@ -77,10 +79,10 @@ final class TestTranslation {
     final Provider p = new Provider("""
                                     {
                                       "fieldA" : "valueA",
-                                        "fieldB" : {
+                                      "fieldB" : {
                                         "fieldC" : "valueC",
-                                          "fieldD" : "valueD"
-                                          }
+                                        "fieldD" : "valueD"
+                                      }
                                     }
                                     """) {
         @Override
@@ -92,16 +94,17 @@ final class TestTranslation {
           return super.keyFor(m);
         }
       };
-    final LogicalModel.Configuration top = p.translate(TraversingConfiguration.class);
-    assertEquals(Set.of("fieldA", "fieldB"), top.keys());
-    final LogicalModel.Value a = top.value("fieldA");
-    final LogicalModel.Configuration b = (LogicalModel.Configuration)top.value("fieldB");
-    assertEquals(Set.of("fieldC", "fieldD"), b.keys());
-    final LogicalModel.Value c = b.value("fieldC");
-    assertSame(c.kind(), LogicalModel.Value.Kind.RAW);
-    final LogicalModel.Value d = b.value("fieldD");
-    assertSame(d.kind(), LogicalModel.Value.Kind.RAW);
-    final LogicalModel.Value missing = b.value("fieldX");
+    final Configuration top = p.translate(TraversingConfiguration.class);
+    assertEquals(Set.of("fieldB"), top.modeledKeys());
+    final Value a = top.value("fieldA");
+    final Configuration b = (Configuration)top.value("fieldB");
+    assertEquals(Set.of("fieldC"), b.modeledKeys());
+    final Value c = b.value("fieldC");
+    assertSame(c.kind(), Value.Kind.RAW);
+    final Value d = b.value("fieldD");
+    assertSame(d.kind(), Value.Kind.RAW);
+    assertFalse(d.modeled());
+    final Value missing = b.value("fieldX");
     assertNull(missing); // for now
   }
 

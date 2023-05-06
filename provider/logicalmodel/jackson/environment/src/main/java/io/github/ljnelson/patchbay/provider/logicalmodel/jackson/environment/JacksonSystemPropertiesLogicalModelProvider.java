@@ -42,5 +42,5 @@ public final class JacksonSystemPropertiesLogicalModelProvider extends AbstractJ
   public final String toString() {
     return this.getClass().getName() + ": System properties";
   }
-  
+
 }

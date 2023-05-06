@@ -23,6 +23,8 @@ module io.github.ljnelson.patchbay {
 
   exports io.github.ljnelson.patchbay;
 
+  exports io.github.ljnelson.patchbay.logical;
+
   requires transitive io.github.ljnelson.jakarta.config.api;
 
   requires            jdk.incubator.concurrent;

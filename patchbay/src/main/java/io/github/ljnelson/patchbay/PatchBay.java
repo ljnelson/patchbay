@@ -40,7 +40,7 @@ import static java.lang.System.Logger.Level.DEBUG;
 public final class PatchBay implements Loader {
 
   private static final Logger logger = System.getLogger(PatchBay.class.getName());
-  
+
   private static final ClassValue<Boolean> IS_CONFIGURATION_CLASS = new ClassValue<>() {
       @Override
       protected final Boolean computeValue(final Class<?> c) {
@@ -64,7 +64,7 @@ public final class PatchBay implements Loader {
 
   private final ClassValue<List<LogicalModelProvider>> logicalModelProvidersByClass;
 
-  private final ClassValue<LogicalModel.Configuration> logicalModelsByClass;
+  private final ClassValue<io.github.ljnelson.patchbay.logical.Configuration> logicalModelsByClass;
 
 
   /*
@@ -82,7 +82,9 @@ public final class PatchBay implements Loader {
     this.coordinates = Objects.requireNonNull(configuration.coordinates(), "configuration.coordinates()");
 
     final List<ConfigurationObjectProvider> unsortedConfigurationObjectProviders = new ArrayList<>(configuration.configurationObjectProviders());
-    Collections.sort(unsortedConfigurationObjectProviders, Comparator.comparingInt(ConfigurationObjectProvider::priority)); // "first priority" priority, not "highest priority" priority
+    Collections.sort(unsortedConfigurationObjectProviders,
+                     Comparator.comparingInt(ConfigurationObjectProvider::priority) // "first priority" priority, not "highest priority" priority
+                     .thenComparing(p -> p.getClass().getName()));
     final List<ConfigurationObjectProvider> configurationObjectProviders = Collections.unmodifiableList(unsortedConfigurationObjectProviders);
     this.configurationObjectProvidersByClass = new ClassValue<>() {
         @Override
@@ -92,7 +94,9 @@ public final class PatchBay implements Loader {
       };
 
     final List<LogicalModelProvider> unsortedLogicalModelProviders = new ArrayList<>(configuration.logicalModelProviders());
-    Collections.sort(unsortedLogicalModelProviders, Comparator.comparingInt(LogicalModelProvider::priority)); // "first priority" priority, not "highest priority" priority
+    Collections.sort(unsortedLogicalModelProviders,
+                     Comparator.comparingInt(LogicalModelProvider::priority) // "first priority" priority, not "highest priority" priority
+                     .thenComparing(p -> p.getClass().getName()));
     final List<LogicalModelProvider> logicalModelProviders = Collections.unmodifiableList(unsortedLogicalModelProviders);
     this.logicalModelProvidersByClass = new ClassValue<>() {
         @Override
@@ -103,7 +107,7 @@ public final class PatchBay implements Loader {
 
     this.logicalModelsByClass = new ClassValue<>() {
         @Override
-        protected final LogicalModel.Configuration computeValue(final Class<?> configurationClass) {
+        protected final io.github.ljnelson.patchbay.logical.Configuration computeValue(final Class<?> configurationClass) {
           return PatchBay.this.computeLogicalModelFor(configurationClass);
         }
       };
@@ -152,7 +156,7 @@ public final class PatchBay implements Loader {
     return this.coordinates;
   }
 
-  public final LogicalModel.Configuration logicalModel(final Class<?> c) {
+  public final io.github.ljnelson.patchbay.logical.Configuration logicalModel(final Class<?> c) {
     return this.logicalModelsByClass.get(c);
   }
 
@@ -177,17 +181,17 @@ public final class PatchBay implements Loader {
     }
   }
 
-  private final LogicalModel.Configuration computeLogicalModelFor(final Class<?> configurationClass) {
+  private final io.github.ljnelson.patchbay.logical.Configuration computeLogicalModelFor(final Class<?> configurationClass) {
     final List<LogicalModelProvider> logicalModelProviders = this.logicalModelProvidersByClass.get(configurationClass);
     if (logicalModelProviders.isEmpty()) {
       throw new NoSuchObjectException();
     }
-    LogicalModel.Configuration defaults = LogicalModel.Configuration.of();
-    LogicalModel.Configuration logicalModel = null;
+    io.github.ljnelson.patchbay.logical.Configuration defaults = io.github.ljnelson.patchbay.logical.Configuration.ofUnmodeled();
+    io.github.ljnelson.patchbay.logical.Configuration logicalModel = null;
     for (int i = logicalModelProviders.size() - 1; i >= 0; i--) {
       logicalModel = logicalModelProviders.get(i).logicalModelFor(this, configurationClass);
       if (logicalModel != null) {
-        logicalModel = new LogicalModel.ConfigurationWithDefaults(logicalModel, defaults);
+        logicalModel = new io.github.ljnelson.patchbay.logical.Configuration(logicalModel, defaults);
       }
       defaults = logicalModel;
     }
@@ -221,7 +225,7 @@ public final class PatchBay implements Loader {
     return Collections.unmodifiableList(list);
   }
 
-  private final <T> T findConfigurationObjectFor(final LogicalModel.Configuration logicalModel, final Class<T> configurationClass) {
+  private final <T> T findConfigurationObjectFor(final io.github.ljnelson.patchbay.logical.Configuration logicalModel, final Class<T> configurationClass) {
     final ConfigurationObjectProvider configurationObjectProvider = this.configurationObjectProvidersByClass.get(configurationClass);
     assert configurationObjectProvider != null;
     return configurationObjectProvider.configurationObjectFor(this, logicalModel, configurationClass);
@@ -351,177 +355,8 @@ public final class PatchBay implements Loader {
 
   }
 
-  public static final class LogicalModel {
-
-    private LogicalModel() {
-    }
-
-    public static interface Value {
-
-      public default boolean expected() {
-        return true;
-      }
-
-      public default Kind kind() {
-        return Kind.OTHER;
-      }
-
-      public enum Kind {
-        ABSENCE,
-        CONFIGURATION,
-        LIST,
-        OTHER,
-        RAW;
-      }
-
-    }
-
-    public static final record Absence(boolean expected) implements LogicalModel.Value {
-
-      private static final Absence EXPECTED = new Absence(true);
-
-      private static final Absence UNEXPECTED = new Absence(false);
-
-      @Override
-      public final Value.Kind kind() {
-        return Value.Kind.ABSENCE;
-      }
-
-      public static final Absence ofExpected() {
-        return EXPECTED;
-      }
-
-      public static final Absence ofUnexpected() {
-        return EXPECTED;
-      }
-
-    }
-
-    public static final record RawValue(boolean expected, Object value) implements LogicalModel.Value {
-
-      public RawValue {
-        Objects.requireNonNull(value, "value");
-      }
-
-      @Override
-      public final Value.Kind kind() {
-        return Kind.RAW;
-      }
-
-      @Override
-        public final String toString() {
-        return String.valueOf(this.value());
-      }
-
-      public static final RawValue of(final boolean expected, final Object value) {
-        return new RawValue(expected, value);
-      }
-
-    }
-
-    public static interface ListValue extends Value {
-
-      @Override
-      public default Kind kind() {
-        return Kind.LIST;
-      }
-
-      public default int size() {
-        return 0;
-      }
-
-      public default Value value(final int index) {
-        return null;
-      }
-
-      public static ListValue of() {
-        final class EmptyListValue implements ListValue {
-          private static final ListValue INSTANCE = new EmptyListValue();
-        };
-        return EmptyListValue.INSTANCE;
-      }
-
-    }
-
-    public static interface Configuration extends Value {
-
-      public default Configuration defaults() {
-        return of();
-      }
-
-      public default Set<String> keys() {
-        return Set.of();
-      }
-
-      @Override
-      public default Kind kind() {
-        return Kind.CONFIGURATION;
-      }
-
-      public default Value value(final String canonicalConfigurationKey) {
-        return null;
-      }
-
-      public static Configuration of() {
-        final class EmptyConfiguration implements Configuration {
-          private static final Configuration INSTANCE = new EmptyConfiguration();
-        };
-        return EmptyConfiguration.INSTANCE;
-      }
-
-    }
-
-    static final class ConfigurationWithDefaults implements Configuration {
-
-      private static final System.Logger logger = System.getLogger(ConfigurationWithDefaults.class.getName());
-      
-      private final Set<String> keys;
-
-      private final Function<? super String, ? extends Value> f;
-
-      private final Configuration defaults;
-
-      ConfigurationWithDefaults(final Configuration c, final Configuration defaults) {
-        super();
-        final Set<String> keys = new HashSet<>(c.keys());
-        keys.addAll(defaults.keys());
-        this.keys = Collections.unmodifiableSet(keys);
-        this.defaults = defaults == null ? Configuration.of() : defaults;
-        this.f = k -> {
-          Value v = c.value(k);
-          if (v == null) {
-            if (logger.isLoggable(DEBUG)) {
-              logger.log(DEBUG, "null value found for \"" + k + "\"; getting default");
-            }
-            v = this.defaults().value(k);
-          }
-          if (logger.isLoggable(DEBUG)) {
-            logger.log(DEBUG, k + " = " + v);
-          }
-          return v;
-        };
-      }
-
-      @Override
-      public final Configuration defaults() {
-        return this.defaults;
-      }
-
-      @Override
-      public final Set<String> keys() {
-        return this.keys;
-      }
-
-      @Override
-      public final Value value(final String key) {
-        return this.f.apply(key);
-      }
-
-    }
-
-  }
-
-  public static interface Provider {
+  // Something that provides something to a PatchBay.
+  public static sealed interface Provider permits ConfigurationObjectProvider, LogicalModelProvider {
 
     public default void configure(final PatchBay loader) {
 
@@ -530,12 +365,12 @@ public final class PatchBay implements Loader {
   }
 
   // A PatchBay.Provider that gets a glop of configuration relevant for a configuration class.
-  public static interface LogicalModelProvider extends Provider {
+  public static non-sealed interface LogicalModelProvider extends Provider {
 
     public static final int DEFAULT_PRIORITY = 100;
 
-    public default LogicalModel.Configuration logicalModelFor(final PatchBay loader,
-                                                              final Class<?> configurationClass) {
+    public default io.github.ljnelson.patchbay.logical.Configuration logicalModelFor(final PatchBay loader,
+                                                                                     final Class<?> configurationClass) {
       return null;
     }
 
@@ -550,13 +385,13 @@ public final class PatchBay implements Loader {
   }
 
   // Something that makes a configuration object.
-  public static interface ConfigurationObjectProvider extends Provider {
+  public static non-sealed interface ConfigurationObjectProvider extends Provider {
 
-    public static final int DEFAULT_PRIORITY = 100;
+    public static final int DEFAULT_PRIORITY = 100; // "first priority" priority, not "highest priority" priority
 
     // Precondition: configurationClass is actually a valid configuration class
     public default <T, U extends T> U configurationObjectFor(final PatchBay loader,
-                                                             final LogicalModel.Configuration logicalModel,
+                                                             final io.github.ljnelson.patchbay.logical.Configuration logicalModel,
                                                              final Class<T> configurationClass)
     {
       return null;
@@ -575,13 +410,15 @@ public final class PatchBay implements Loader {
   public static final class ServiceLoaderConfiguration implements Configuration {
 
     private static final ServiceLoaderConfiguration INSTANCE = new ServiceLoaderConfiguration();
-    
+
     public ServiceLoaderConfiguration() {
       super();
     }
 
     @Override
     public final List<ConfigurationObjectProvider> configurationObjectProviders() {
+      // No need to sort. Because there may be many possible implementations of PatchBay.Configuration, PatchBay does
+      // the sorting. See the PatchBay constructor.
       return ServiceLoader.load(ConfigurationObjectProvider.class)
         .stream()
         .map(ServiceLoader.Provider::get)
@@ -590,6 +427,8 @@ public final class PatchBay implements Loader {
 
     @Override
     public final List<LogicalModelProvider> logicalModelProviders() {
+      // No need to sort. Because there may be many possible implementations of PatchBay.Configuration, PatchBay does
+      // the sorting. See the PatchBay constructor.
       return ServiceLoader.load(LogicalModelProvider.class)
         .stream()
         .map(ServiceLoader.Provider::get)
@@ -601,8 +440,8 @@ public final class PatchBay implements Loader {
       return ServiceLoader.load(Coordinates.class)
         .findFirst()
         .orElseGet(Coordinates::of);
-    }    
-    
+    }
+
   }
 
   // A default ConfigurationObjectProvider that is the last fallback and the one used for bootstrapping.
@@ -629,7 +468,7 @@ public final class PatchBay implements Loader {
     @Override
     @SuppressWarnings("unchecked")
     public final <T, U extends T> U configurationObjectFor(final PatchBay ignoredLoader,
-                                                           final LogicalModel.Configuration ignoredLogicalModel,
+                                                           final io.github.ljnelson.patchbay.logical.Configuration ignoredLogicalModel,
                                                            final Class<T> configurationClass)
     {
       return (U)configurationObjects.get(configurationClass);

@@ -20,4 +20,6 @@ module io.github.ljnelson.patchbay.provider.logicalmodel.jackson.shared {
   
   requires transitive io.github.ljnelson.patchbay;
 
+  requires transitive io.github.ljnelson.patchbay.provider.logicalmodel.shared;
+
 }

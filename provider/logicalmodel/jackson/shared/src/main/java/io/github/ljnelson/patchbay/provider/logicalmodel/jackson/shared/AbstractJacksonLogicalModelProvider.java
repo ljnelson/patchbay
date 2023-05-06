@@ -50,12 +50,19 @@ import com.fasterxml.jackson.core.ObjectCodec;
 import com.fasterxml.jackson.core.TreeNode;
 
 import io.github.ljnelson.patchbay.PatchBay;
-import io.github.ljnelson.patchbay.PatchBay.LogicalModel;
 import io.github.ljnelson.patchbay.PatchBay.LogicalModelProvider;
+
+import io.github.ljnelson.patchbay.logical.Absence;
+import io.github.ljnelson.patchbay.logical.Configuration;
+import io.github.ljnelson.patchbay.logical.ListValue;
+import io.github.ljnelson.patchbay.logical.RawValue;
+import io.github.ljnelson.patchbay.logical.Value;
+
+import io.github.ljnelson.patchbay.provider.logicalmodel.shared.AbstractLogicalModelProvider;
 
 import static java.lang.System.Logger.Level.DEBUG;
 
-public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec, F extends JsonFactory> implements LogicalModelProvider {
+public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec, F extends JsonFactory> extends AbstractLogicalModelProvider {
 
 
   /*
@@ -82,8 +89,8 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
 
 
   // Efficiently stores the set of canonical representations of configuration keys effectively declared by a
-  // configuration class. This is an instance field because it uses the virtual computeKeys(Class<?>) method defined
-  // below.
+  // configuration class. This is an instance field because it uses the virtual computeModeledKeys(Class<?>) method
+  // defined below.
   private final ClassValue<Set<String>> keys;
 
   private final Function<? super Class<?>, ? extends C> codecFunction;
@@ -109,7 +116,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     this.keys = new ClassValue<>() {
         @Override
         protected final Set<String> computeValue(final Class<?> c) {
-          return AbstractJacksonLogicalModelProvider.this.computeKeys(c);
+          return AbstractJacksonLogicalModelProvider.this.computeModeledKeys(c);
         }
       };
     this.codecFunction = Objects.requireNonNull(codecFunction, "codecFunction");
@@ -167,11 +174,11 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     return treeNode;
   }
 
-  public final LogicalModel.Configuration translate(final Class<?> configurationClass) {
+  public final Configuration translate(final Class<?> configurationClass) {
     return this.translate(configurationClass, this.codec(configurationClass));
   }
 
-  protected LogicalModel.Configuration translate(final Class<?> configurationClass, final C codec) {
+  protected Configuration translate(final Class<?> configurationClass, final C codec) {
     try {
       final TreeNode treeNode = this.treeNode(configurationClass, codec);
       if (logger.isLoggable(DEBUG)) {
@@ -190,11 +197,11 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
 
   // Given a configuration class, return a Collection of canonical representations of configuration keys it logically
   // contains. Probably can move up to PatchBay level.
-  public final Set<String> keys(final Class<?> c) {
+  public final Set<String> modeledKeys(final Class<?> c) {
     return this.keys.get(c);
   }
 
-  protected String rawValue(final boolean expected, final TreeNode v, final C codec) {
+  protected String rawValue(final boolean modeled, final TreeNode v, final C codec) {
     try {
       return codec.treeToValue(v, String.class);
     } catch (final IOException e) {
@@ -203,7 +210,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
   }
 
   @Override
-  public LogicalModel.Configuration logicalModelFor(final PatchBay loader, final Class<?> configurationClass) {
+  public Configuration logicalModelFor(final PatchBay loader, final Class<?> configurationClass) {
     return this.translate(configurationClass);
   }
 
@@ -214,57 +221,61 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
    */
 
 
-  private final LogicalModel.Configuration translate(final Class<?> configurationClass,
-                                                     final TreeNode objectNode,
-                                                     final C codec) {
+  private final Configuration translate(final Class<?> configurationClass,
+                                        final TreeNode objectNode,
+                                        final C codec) {
     if (!PatchBay.configurationClass(configurationClass)) {
       throw new IllegalArgumentException("configurationClass: " + configurationClass);
     }
     return this.translateObjectNode(configurationClass, true, objectNode, codec);
   }
 
-  private final LogicalModel.Value translateTreeNode(final Type t,
-                                                     final boolean expected,
-                                                     final TreeNode treeNode,
-                                                     final C codec) {
+  private final Value translateTreeNode(final Type t,
+                                        final boolean modeled,
+                                        final TreeNode treeNode,
+                                        final C codec) {
     return switch (treeNode) {
-    case TreeNode o when o.isObject() -> translateObjectNode(t, expected, o, codec);
-    case TreeNode a when a.isArray() -> translateArrayNode(t, expected, a, codec);
-    case TreeNode m when m.isMissingNode() -> translateMissingNode(m, expected, codec);
-    case TreeNode v when v.isValueNode() -> translateValueNode(t, expected, v, codec);
+    case TreeNode o when o.isObject() -> translateObjectNode(t, modeled, o, codec);
+    case TreeNode a when a.isArray() -> translateArrayNode(t, modeled, a, codec);
+    case TreeNode m when m.isMissingNode() -> translateMissingNode(m, modeled, codec);
+    case TreeNode v when v.isValueNode() -> translateValueNode(t, modeled, v, codec);
     default -> throw new AssertionError();
     };
   }
 
-  private final LogicalModel.Configuration translateObjectNode(final Type t,
-                                                               final boolean expected,
-                                                               final TreeNode objectNode,
-                                                               final C codec) {
+  private final Configuration translateObjectNode(final Type t,
+                                                  final boolean modeled,
+                                                  final TreeNode objectNode,
+                                                  final C codec) {
     if (!objectNode.isObject()) {
       throw new IllegalArgumentException();
     }
-    final Map<String, LogicalModel.Value> map = new HashMap<>();
+    final Map<String, Value> map = new HashMap<>();
+    final Set<String> modeledKeys = this.modeledKeys(t);
     final Iterator<String> fieldNamesIterator = objectNode.fieldNames();
-    final Set<String> expectedKeys = this.keys(t);
     while (fieldNamesIterator.hasNext()) {
       final String fieldName = fieldNamesIterator.next();
-      final String key = this.fieldNameToKey(fieldName, expectedKeys);
-      map.put(key, this.translateTreeNode(this.typeFor(t, key),
-                                          key != null && expectedKeys.contains(key), // was it an expected value or not?
-                                          objectNode.get(fieldName), // (will never be null)
-                                          codec));
+      final String key = this.fieldNameToKey(fieldName, modeledKeys);      
+      if (key != null) {
+        map.put(key, this.translateTreeNode(this.typeFor(t, key),
+                                            modeledKeys.contains(key), // was it a modeled value or not?
+                                            objectNode.get(fieldName), // the value (will never be null)
+                                            codec));
+      }
     }
-    return new AbstractJacksonLogicalModelProvider.Configuration(expected, expectedKeys, map);
+    return new Configuration(modeled, modeledKeys, map::get);
   }
 
-  private final String fieldNameToKey(final String fieldName, final Set<String> expectedKeys) { // TODO: could be richer to permit some other strategy?
+  // Some future revision of this method may return null to indicate: don't store this key.
+  // The returned key need not come from modeledKey, and often does not. It is often just the fieldName itself.
+  private final String fieldNameToKey(final String fieldName, final Set<String> modeledKeys) { // TODO: could be richer to permit some other strategy?
     return fieldName;
   }
 
-  private final LogicalModel.ListValue translateArrayNode(final Type t,
-                                                          final boolean expected,
-                                                          final TreeNode arrayNode,
-                                                          final C codec) {
+  private final ListValue translateArrayNode(final Type t,
+                                             final boolean modeled,
+                                             final TreeNode arrayNode,
+                                             final C codec) {
     if (!arrayNode.isArray()) {
       throw new IllegalArgumentException("!arrayNode.isArray(): " + arrayNode);
     }
@@ -273,40 +284,42 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     }
     final int size = arrayNode.size();
     if (size == 0) {
-      return LogicalModel.ListValue.of();
+      return ListValue.of();
     }
     final Type listElementType = t instanceof ParameterizedType p ? p.getActualTypeArguments()[0] : Object.class;
-    final List<LogicalModel.Value> list = new ArrayList<>();
+    final List<Value> list = new ArrayList<>();
     for (int i = 0; i < size; i++) {
-      list.add(this.translateTreeNode(listElementType, expected, arrayNode.get(i), codec));
+      list.add(this.translateTreeNode(listElementType, modeled, arrayNode.get(i), codec));
     }
-    return new AbstractJacksonLogicalModelProvider.ListValue(expected, list);
+    return new ListValue(modeled, list);
   }
 
-  private final LogicalModel.Value translateMissingNode(final TreeNode missingNode,
-                                                        final boolean expected, // may not be needed
-                                                        final C codec) {
+  // Here mostly for completeness; never actually called because translateObjectNode() never calls
+  // treeNode.path(fieldName); it always calls treeNode.get(fieldName)
+  private final Value translateMissingNode(final TreeNode missingNode,
+                                           final boolean modeled, // may not be needed
+                                           final C codec) {
     if (!missingNode.isMissingNode()) {
       throw new IllegalArgumentException("!missingNode.isMissingNode(): " + missingNode);
     }
-    return expected ? LogicalModel.Absence.ofExpected() : LogicalModel.Absence.ofUnexpected();
+    return modeled ? Absence.ofModeled() : Absence.ofUnmodeled();
   }
 
-  private final LogicalModel.Value translateValueNode(final Type t,
-                                                      final boolean expected,
-                                                      final TreeNode valueNode,
-                                                      final C codec) {
+  private final Value translateValueNode(final Type t,
+                                         final boolean modeled,
+                                         final TreeNode valueNode,
+                                         final C codec) {
     if (!valueNode.isValueNode()) {
       throw new IllegalArgumentException("!valueNode.isValueNode(): " + valueNode);
     }
-    return LogicalModel.RawValue.of(expected, this.rawValue(expected, valueNode, codec));
+    return new RawValue(modeled, this.rawValue(modeled, valueNode, codec));
   }
 
-  private final Set<String> keys(final Type t) {
+  private final Set<String> modeledKeys(final Type t) {
     return switch (t) {
     case null -> Set.of();
-    case Class<?> c -> this.keys(c);
-    case ParameterizedType p -> this.keys(p.getRawType());
+    case Class<?> c -> this.modeledKeys(c);
+    case ParameterizedType p -> this.modeledKeys(p.getRawType());
     default -> Set.of();
     };
   }
@@ -336,7 +349,7 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
   // Given a Class, if it is a configuration class, return the set of canonical representations of the configuration
   // keys it logically declares. In all other cases return an empty set. Called once, ever, by the keys ClassValue
   // field.
-  private final Set<String> computeKeys(final Class<?> configurationClass) {
+  private final Set<String> computeModeledKeys(final Class<?> configurationClass) {
     if (!PatchBay.configurationClass(configurationClass)) {
       return Set.of();
     }
@@ -393,53 +406,54 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
 
   }
 
+  /*
   static final class Configuration implements LogicalModel.Configuration {
 
-    private final boolean expected;
+    private final boolean modeled;
 
     private final Set<String> keys;
 
-    private final Set<String> expectedKeys;
+    private final Set<String> modeledKeys;
 
-    private final Set<String> unexpectedKeys;
+    private final Set<String> unmodeledKeys;
 
     private final Function<? super String, ? extends LogicalModel.Value> valueFunction;
 
-    Configuration(final boolean expected, final Set<? extends String> expectedKeys, final Map<? extends String, ? extends LogicalModel.Value> map) {
+    Configuration(final boolean modeled, final Set<? extends String> modeledKeys, final Map<? extends String, ? extends LogicalModel.Value> map) {
       super();
-      this.expected = expected;
+      this.modeled = modeled;
       final Map<String, LogicalModel.Value> m = Map.copyOf(map);
-      this.expectedKeys = expectedKeys == null || expectedKeys.isEmpty() ? Set.of() : Set.copyOf(expectedKeys);
+      this.modeledKeys = modeledKeys == null || modeledKeys.isEmpty() ? Set.of() : Set.copyOf(modeledKeys);
       Set<String> keys = new HashSet<>(m.keySet());
-      keys.removeIf(this.expectedKeys::contains);
-      this.unexpectedKeys = Set.copyOf(keys);
-      keys.addAll(this.expectedKeys);
+      keys.removeIf(this.modeledKeys::contains);
+      this.unmodeledKeys = Set.copyOf(keys);
+      keys.addAll(this.modeledKeys);
       this.keys = Collections.unmodifiableSet(keys);
       this.valueFunction = k -> {
         LogicalModel.Value v = m.get(k);
         if (v == null) {
-          if (this.expectedKeys.contains(k)) {
-            return LogicalModel.Absence.ofExpected();
+          if (this.modeledKeys.contains(k)) {
+            return LogicalModel.Absence.ofModeled();
           }
-          assert !this.unexpectedKeys.contains(k) : "Somehow an unexpected key had a null value";
+          assert !this.unmodeledKeys.contains(k) : "Somehow an unmodeled key had a null value";
         } else {
-          assert expectedKeys.contains(k) ? v.expected() : !v.expected();
+          assert modeledKeys.contains(k) ? v.modeled() : !v.modeled();
         }
         return v;
       };
     }
 
     @Override
-    public final boolean expected() {
-      return this.expected;
+    public final boolean modeled() {
+      return this.modeled;
     }
 
-    public final Set<String> expectedKeys() {
-      return this.expectedKeys;
+    public final Set<String> modeledKeys() {
+      return this.modeledKeys;
     }
 
-    public final Set<String> unexpectedKeys() {
-      return this.unexpectedKeys;
+    public final Set<String> unmodeledKeys() {
+      return this.unmodeledKeys;
     }
 
     @Override // LogicalModel.Configuration
@@ -456,29 +470,29 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
 
   static final class ListValue implements LogicalModel.ListValue {
 
-    private final boolean expected;
+    private final boolean modeled;
 
     private final int size;
 
     private final IntFunction<? extends LogicalModel.Value> valueFunction;
 
-    ListValue(final boolean expected, final List<? extends LogicalModel.Value> list) {
+    ListValue(final boolean modeled, final List<? extends LogicalModel.Value> list) {
       super();
-      this.expected = expected;
+      this.modeled = modeled;
       this.size = list.size();
       this.valueFunction = list::get;
     }
 
-    ListValue(final boolean expected, final int size, final IntFunction<? extends LogicalModel.Value> valueFunction ){
+    ListValue(final boolean modeled, final int size, final IntFunction<? extends LogicalModel.Value> valueFunction ){
       super();
-      this.expected = expected;
+      this.modeled = modeled;
       this.size = Math.max(0, size);
       this.valueFunction = Objects.requireNonNull(valueFunction, "valueFunction");
     }
 
     @Override
-    public final boolean expected() {
-      return this.expected;
+    public final boolean modeled() {
+      return this.modeled;
     }
 
     @Override
@@ -492,5 +506,6 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
     }
 
   }
+  */
 
 }

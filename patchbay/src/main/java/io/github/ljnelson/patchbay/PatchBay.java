@@ -149,10 +149,12 @@ public final class PatchBay implements Loader {
     validateConfigurationClass(configurationClass);
 
     if (LOAD_REQUEST.orElse(null) == configurationClass) {
-      throw new NoSuchObjectException();
+      throw new NoSuchObjectException(configurationClass.getName() + "; cyclic load request");
     }
     try {
-      return ScopedValue.where(LOAD_REQUEST, configurationClass, () -> this.computeConfigurationObject(this.logicalModel(configurationClass), configurationClass));
+      return ScopedValue.where(LOAD_REQUEST, configurationClass,
+                               () -> this.computeConfigurationObject(this.logicalModel(configurationClass),
+                                                                     configurationClass));
     } catch (final RuntimeException e) {
       throw e;
     } catch (final Exception e) {
@@ -166,8 +168,14 @@ public final class PatchBay implements Loader {
 
   public final io.github.ljnelson.patchbay.logical.Configuration logicalModel(final Class<?> c) {
     return this.logicalModelsByClass.get(c);
-  }  
+  }
 
+  // Called not just by a ClassValue, but potentially by ConfigurationObjectProvider instances as well.
+  public final <T> T computeConfigurationObject(final io.github.ljnelson.patchbay.logical.Configuration logicalModel, final Class<T> configurationClass) {
+    final ConfigurationObjectProvider configurationObjectProvider = this.configurationObjectProvidersByClass.get(configurationClass);
+    return configurationObjectProvider.configurationObjectFor(this, logicalModel, configurationClass);
+  }
+  
 
   /*
    * Private instance methods.
@@ -179,8 +187,12 @@ public final class PatchBay implements Loader {
       return PATCHBAY.get();
     }
     try {
-      return ScopedValue.where(PATCHBAY, new PatchBay(this.load(Configuration.class)), PATCHBAY::get);
+      return ScopedValue.where(PATCHBAY, new PatchBay(this.load(Configuration.class)),
+                               PATCHBAY::get);
     } catch (final NoSuchObjectException e) {
+      if (logger.isLoggable(DEBUG)) {
+        logger.log(DEBUG, "No additional Loader bootstrapped; returning this PatchBay");
+      }
       return this;
     } catch (final RuntimeException e) {
       throw e;
@@ -189,10 +201,11 @@ public final class PatchBay implements Loader {
     }
   }
 
+  // Called once, ever, from a ClassValue.
   private final io.github.ljnelson.patchbay.logical.Configuration computeLogicalModelFor(final Class<?> configurationClass) {
     final List<LogicalModelProvider> logicalModelProviders = this.logicalModelProvidersByClass.get(configurationClass);
     if (logicalModelProviders.isEmpty()) {
-      throw new NoSuchObjectException();
+      throw new NoSuchObjectException(configurationClass.getName() + "; no suitable LogicalModelProviders found");
     }
     io.github.ljnelson.patchbay.logical.Configuration defaults = io.github.ljnelson.patchbay.logical.Configuration.ofUnmodeled();
     io.github.ljnelson.patchbay.logical.Configuration logicalModel = null;
@@ -216,27 +229,24 @@ public final class PatchBay implements Loader {
     }
     list.trimToSize();
     if (logger.isLoggable(DEBUG)) {
-      final StringBuilder sb = new StringBuilder("computed LogicalModelProviders for ")
-        .append(configurationClass)
-        .append(":\n");
+      final StringBuilder sb = new StringBuilder("computed LogicalModelProviders for ").append(configurationClass).append(":");
+      
+      if (list.isEmpty()) {
+        sb.append(" (none)");
+      }
       for (int i = 0; i < list.size(); i++) {
         final LogicalModelProvider p = list.get(i);
-        sb.append(i + 1)
+        sb.append("\n")
+          .append(i + 1)
           .append(": ")
           .append(p)
           .append(" (priority: ")
           .append(p.priority())
-          .append(")\n");
+          .append(")");
       }
       logger.log(DEBUG, sb.toString());
     }
     return Collections.unmodifiableList(list);
-  }
-
-  public final <T> T computeConfigurationObject(final io.github.ljnelson.patchbay.logical.Configuration logicalModel, final Class<T> configurationClass) {
-    final ConfigurationObjectProvider configurationObjectProvider = this.configurationObjectProvidersByClass.get(configurationClass);
-    assert configurationObjectProvider != null;
-    return configurationObjectProvider.configurationObjectFor(this, logicalModel, configurationClass);
   }
 
   // Called once, ever, from a ClassValue.
@@ -460,7 +470,7 @@ public final class PatchBay implements Loader {
     private static final ClassValue<?> configurationObjects = new ClassValue<>() {
         @Override
         protected final Object computeValue(final Class<?> configurationClass) {
-          return ServiceLoader.load(configurationClass).findFirst().orElseThrow(NoSuchObjectException::new);
+          return ServiceLoader.load(configurationClass).findFirst().orElseThrow(() -> new NoSuchObjectException(configurationClass.getName()));
         }
       };
 
@@ -471,6 +481,19 @@ public final class PatchBay implements Loader {
     @Override
     public final int priority() {
       return Integer.MAX_VALUE; // "last priority" priority, not "highest priority" priority
+    }
+
+    @Override
+    public final boolean accepts(final PatchBay loader, final Class<?> configurationClass) {
+      // EXPERIMENTAL
+      final Module m = this.getClass().getModule();
+      if (m != null) {
+        if (!m.canUse(configurationClass)) {
+          m.addUses(configurationClass);
+        }
+        assert m.canUse(configurationClass);
+      }
+      return true;
     }
 
     @Override

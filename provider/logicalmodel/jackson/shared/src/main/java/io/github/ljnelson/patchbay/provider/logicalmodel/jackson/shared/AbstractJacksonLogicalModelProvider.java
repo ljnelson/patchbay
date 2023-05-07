@@ -129,6 +129,14 @@ public abstract class AbstractJacksonLogicalModelProvider<C extends ObjectCodec,
    */
 
 
+  @Override
+  public boolean accepts(final PatchBay loader, final Class<?> configurationClass) {
+    return
+      !PatchBay.Provider.class.isAssignableFrom(configurationClass) &&
+      !PatchBay.Configuration.class.isAssignableFrom(configurationClass) &&
+      !PatchBay.Configuration.Coordinates.class.isAssignableFrom(configurationClass);
+  }
+
   protected final C codec(final Class<?> configurationClass) {
     return this.codecFunction.apply(configurationClass);
   }

@@ -64,6 +64,7 @@
   </distributionManagement>
 
   <modules>
+    <module>cdi</module>
     <module>fake-jakarta.config-api</module>
     <module>patchbay</module>
     <module>provider/configurationobject/proxy</module>
@@ -90,14 +91,36 @@
         <scope>import</scope>
       </dependency>
 
+      <dependency>
+        <groupId>org.jboss.weld</groupId>
+        <artifactId>weld-core-bom</artifactId>
+        <version>5.1.0.Final</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
 
       <!-- Normal dependencies. -->
 
 
       <dependency>
+        <groupId>jakarta.enterprise</groupId>
+        <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        <version>4.0.1</version>
+        <type>jar</type>
+      </dependency>
+
+      <dependency>
         <groupId>org.hamcrest</groupId>
         <artifactId>hamcrest</artifactId>
         <version>2.2</version>
+        <type>jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>org.jboss.logging</groupId>
+        <artifactId>jboss-logging</artifactId>
+        <version>3.5.0.Final</version>
         <type>jar</type>
       </dependency>
 
@@ -135,6 +158,20 @@
 
       <dependency>
         <groupId>${project.groupId}</groupId>
+        <artifactId>patchbay-cdi</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>patchbay-provider-configurationobject-proxy</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
         <artifactId>patchbay-provider-logicalmodel-jackson-applicationjson</artifactId>
         <version>${project.version}</version>
         <type>jar</type>
@@ -160,7 +197,7 @@
         <version>${project.version}</version>
         <type>jar</type>
       </dependency>
-      
+
       <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>patchbay-provider-logicalmodel-jackson-shared</artifactId>

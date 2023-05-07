@@ -25,20 +25,20 @@ module io.github.ljnelson.patchbay {
 
   exports io.github.ljnelson.patchbay.logical;
 
+  requires jdk.incubator.concurrent;
+
   requires transitive io.github.ljnelson.jakarta.config.api;
 
-  requires            jdk.incubator.concurrent;
-
   provides Loader with PatchBay;
+
+  provides ConfigurationObjectProvider with ServiceLoaderConfigurationObjectProvider;
 
   uses PatchBay.Configuration;
 
   uses PatchBay.Configuration.Coordinates;
-  
-  uses LogicalModelProvider;
-  
-  uses ConfigurationObjectProvider;
 
-  provides ConfigurationObjectProvider with ServiceLoaderConfigurationObjectProvider;
+  uses LogicalModelProvider;
+
+  uses ConfigurationObjectProvider;
 
 }

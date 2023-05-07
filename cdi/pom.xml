@@ -2,17 +2,17 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>patchbay-provider-configurationobject-proxy</artifactId>
+  <artifactId>patchbay-cdi</artifactId>
 
   <parent>
     <groupId>io.github.ljnelson</groupId>
     <artifactId>patchbay-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <relativePath>../../../pom.xml</relativePath>
+    <relativePath>../pom.xml</relativePath>
   </parent>
 
-  <name>PatchBay: Provider: Configuration Object: Proxy</name>
-  <description>PatchBay: Provider: Configuration Object: Proxy: A PatchBay ConfigurationObjectProvider built using Java's built-in proxy facility.</description>
+  <name>PatchBay: CDI</name>
+  <description>PatchBay: CDI: CDI portable extensions</description>
 
   <dependencies>
 
@@ -21,15 +21,20 @@
     <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>jakarta.config-api</artifactId>
-        <version>${project.version}</version>
         <type>jar</type>
         <scope>compile</scope>
     </dependency>
-    
+
+    <dependency>
+      <groupId>jakarta.enterprise</groupId>
+      <artifactId>jakarta.enterprise.cdi-api</artifactId>
+      <type>jar</type>
+      <scope>compile</scope>
+    </dependency>
+
     <dependency>
         <groupId>${project.groupId}</groupId>
         <artifactId>patchbay</artifactId>
-        <version>${project.version}</version>
         <type>jar</type>
         <scope>compile</scope>
     </dependency>
@@ -37,6 +42,20 @@
 
     <!-- Test-scoped dependencies. -->
 
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>patchbay-provider-configurationobject-proxy</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>patchbay-provider-logicalmodel-jackson-applicationjson</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+    
     <dependency>
       <groupId>org.hamcrest</groupId>
       <artifactId>hamcrest</artifactId>
@@ -59,14 +78,26 @@
     </dependency>
 
     <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>patchbay-provider-logicalmodel-jackson-applicationjson</artifactId>
+      <groupId>org.jboss.logging</groupId>
+      <artifactId>jboss-logging</artifactId>
+      <type>jar</type>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.jboss.weld.se</groupId>
+      <artifactId>weld-se-core</artifactId>
       <type>jar</type>
       <scope>test</scope>
     </dependency>
 
   </dependencies>
 
+  <properties>
+    <java.util.logging.config.file>src/test/logging.properties</java.util.logging.config.file>
+    <org.jboss.logging.provider>jdk</org.jboss.logging.provider>
+  </properties>
+  
   <build>
     <plugins>
       <plugin>
@@ -74,14 +105,16 @@
         <configuration>
           <argLine>
             --add-modules=java.logging,org.junit.jupiter.engine
+            --add-reads=org.jboss.logging=java.logging
             --enable-preview
           </argLine>
           <systemPropertyVariables>
-            <java.util.logging.config.file>src/test/logging.properties</java.util.logging.config.file>
+            <java.util.logging.config.file>${java.util.logging.config.file}</java.util.logging.config.file>
+            <org.jboss.logging.provider>${org.jboss.logging.provider}</org.jboss.logging.provider>
           </systemPropertyVariables>
         </configuration>
       </plugin>
     </plugins>
   </build>
-  
+
 </project>
